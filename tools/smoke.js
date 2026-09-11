@@ -260,6 +260,34 @@ console.log('— 技能与连锁 —');
     else console.log(`  ✓ 9 只鸟释放技能均产生粒子特效`);
   }
 
+  /* 黑鸟「引信期内撞到即炸」兜底：之前只 fuse<=0 触发 boom，导致鸟飞到爆炸范围外才炸
+     —— 现在撞到结构/猪/地面都会立即引爆（前提 fuse>0，即玩家已点过技能） */
+  {
+    const g = new Game(makeEl());
+    g.loadLevel(2);                            // L3 有 TNT / 木 / 砖块 / 猪，可以多角度验证
+    const bk = new Bird('black', SLING.x, SLING.y - 14);
+    g.birds.push(bk); g.currentBird = bk;
+    g.launch(bk, 1100, -440);                  // 高弹道瞄准 TNT 群
+    for (let s = 0; s < 12; s++) g.stepPhysics(1 / 120);     // 飞一段
+    g.updateGameplay(1 / 120, 1 / 120);
+    bk.useSkill(g);                            // 点技能 fuse=0.5
+    const beforeSkillScore = g.score;
+    // 继续推进到撞到东西（典型 < 0.6s）
+    for (let s = 0; s < 80; s++) {
+      g.stepPhysics(1 / 120); g.updateGameplay(1 / 120, 1 / 120);
+      if (bk.dead) break;
+    }
+    // 期望：撞到瞬间 boom 触发，score > 0（至少撞墙/撞猪/炸到 TNT 砖块），pigs 或 blocks 数量减少
+    const scoreGain = g.score - beforeSkillScore;
+    const blocksBefore = 9;                    // L3 初始 blocks 数
+    const blocksLost = blocksBefore - g.blocks.length;
+    const pigsLost = g.pigs.filter(p => !p.dead).length === 3 ? 0 : 1;
+    if (bk.dead && scoreGain > 0)
+      console.log(`  ✓ 黑鸟「引信期内撞到即炸」：爆炸触发，score+${scoreGain}，毁伤 blocks=${blocksLost}/pigs=${pigsLost}`);
+    else
+      bad(`黑鸟「引信期内撞到即炸」失效：dead=${bk.dead}，fuse=${bk.fuse.toFixed(2)}，score+${scoreGain}，blocksLost=${blocksLost}/pigsLost=${pigsLost}`);
+  }
+
   const g = new Game(makeEl());
   g.loadLevel(2);
   g.explodeAt(1200, 640, 200, 600);

@@ -279,12 +279,16 @@ class Game {
         return;
       }
     }
-    // 撞地面：猪会摔伤（经典机制），砖块重摔受损，红鸟引爆炸裂
+    // 撞地面：猪会摔伤（经典机制），砖块重摔受损，红鸟/黑鸟立即引爆
     if (!b && a && a.owner) {
       const own = a.owner;
       if (a.tag === 'pig') { own.hurt(this, impact * 0.55); this.fx.dust(own.x, GROUND_Y, 4); }
       else if (a.tag === 'block' && impact > 320) own.hurt(this, impact * 0.14);
       else if (a.tag === 'bird' && own.armedBlast) { this.boom(own); own.armedBlast = false; }
+      else if (a.tag === 'bird' && own.def.skillKey === 'bomb' && own.fuse > 0) {
+        // 黑鸟：引信期内撞墙立刻炸，避免"飞到爆炸范围之外才引信归零"的哑火
+        this.boom(own); own.fuse = 0;
+      }
       return;
     }
     if (!a || !b || !a.owner || !b.owner) return;
@@ -294,6 +298,14 @@ class Game {
     const isBlock = (o) => o && o.tag === 'block';
     const dmgBird = o => o.owner ? o.owner.def.power * (o.owner.power || 1) : 1;
 
+    // 黑鸟「引信期内撞到即炸」兜底：无论撞的是哪一方，碰到就引爆
+    const tryBlackBomb = (bird) => {
+      if (!bird || bird.dead) return;
+      if (bird.def.skillKey === 'bomb' && bird.fuse > 0) {
+        this.boom(bird); bird.fuse = 0;
+      }
+    };
+
     for (const [src, dst] of [[a, b], [b, a]]) {
       const S = src.owner, D = dst.owner;
       if (!S || !D) continue;
@@ -301,12 +313,14 @@ class Game {
         const dmg = impact * 0.34 * dmgBird(src);
         D.hurt(this, dmg);
         if (src.owner.armedBlast) { this.boom(src.owner); src.owner.armedBlast = false; }
+        else tryBlackBomb(src.owner);
         Sfx[dst.owner.material === 'stone' ? 'hitStone' : (dst.owner.material === 'ice' || dst.owner.material === 'glass' ? 'hitIce' : 'hitWood')](clamp(impact / 700, .4, 1.4));
         this.fx.addShake(clamp(impact / 130, 1, 9) * (src.owner && src.owner.power === 2 ? 1.6 : 1));
       } else if (isBird(src) && isPig(dst)) {
         const dmg = impact * 0.52 * dmgBird(src);
         D.hurt(this, dmg);
         if (src.owner.armedBlast) { this.boom(src.owner); src.owner.armedBlast = false; }
+        else tryBlackBomb(src.owner);
         this.fx.addShake(clamp(impact / 110, 2, 12));
         this.fx.freeze(0.03);
       } else if (isBlock(src) && isPig(dst)) {
@@ -325,9 +339,11 @@ class Game {
     const x = bird.x, y = bird.y;
     bird.dead = true;
     if (bird.body) { bird.body.removed = true; bird.body = null; }
-    this.fx.explosion(x, y, 165);
+    this.fx.explosion(x, y, 210);
     Sfx.explode();
-    this.explodeAt(x, y, 175, 520);
+    // 黑鸟是"一发定胜负"的重型弹药（带引信延迟、每关只给一只），
+    // 爆炸范围与伤害都要比 TNT 砖块（190/520）高一档，才对得起"大范围摧毁"的定位。
+    this.explodeAt(x, y, 230, 760);
     this.fx.feathers(x, y, bird.def.body, 8);
   }
 
