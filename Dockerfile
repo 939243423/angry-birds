@@ -12,6 +12,7 @@ RUN rm -rf /usr/share/nginx/html/*
 # 不要用 COPY . ，否则 tools/ .github/ Dockerfile nginx.conf 等
 # 开发文件会被一并发布，并可通过 HTTP 直接访问到。
 COPY index.html /usr/share/nginx/html/
+COPY favicon.svg favicon-32.png favicon-180.png /usr/share/nginx/html/
 COPY css/       /usr/share/nginx/html/css/
 COPY js/        /usr/share/nginx/html/js/
 

@@ -24,6 +24,7 @@ class Game {
     this.springs = []; this.portals = []; this.fans = [];
     this.pendingBooms = [];
     this.wells = [];             // 引力奇点（引力紫技能）
+    this.drops = [];             // 空投炸弹（空投白技能）
     this.birdQueue = [];
     this.currentBird = null;
     this.prevPath = [];
@@ -32,10 +33,12 @@ class Game {
     this.camX = 0; this.camZoom = 1;
     this.settleTimer = 0;
     this.endTimer = 0;
+    this.rescueUsed = false;     // 每关一次的救援巨鸟
     this.combo = 0; this.comboTimer = 0;
     this.drag = { active: false, id: null };
     this.pointer = { x: 0, y: 0 };
     this.aimPoints = [];
+    this.aimHit = null;
     this.resultShown = false;
     this.launchCount = 0;
     this.egg = new EggGame(this);
@@ -144,10 +147,12 @@ class Game {
     this.springs = []; this.portals = []; this.fans = [];
     this.pendingBooms = [];
     this.wells = [];
+    this.drops = [];
     this.prevPath = [];
     this.score = 0;
     this.combo = 0;
     this.launchCount = 0;
+    this.rescueUsed = false;
     this.resultShown = false;
     this.world.wind = def.wind || 0;
     this.fx.shake = 0; this.fx.flash = 0; this.fx.timeScale = 1;
@@ -239,6 +244,7 @@ class Game {
     this.launchCount++;
     this.prevPath = [];
     this.aimPoints = [];
+    this.aimHit = null;
     this.hasSkillHintShown = false;
     Sfx.launch(); Sfx.whistle();
     this.fx.dust(SLING.x, GROUND_Y, 5);
@@ -248,6 +254,13 @@ class Game {
   /* ---------------- 碰撞 ---------------- */
   onImpact(a, b, nx, ny, impact, px, py) {
     if (impact < 85) return;
+    // 泰坦巨鸟：任何有效撞击都立即引发毁灭爆炸（救援保底，确保能清场）
+    for (const o of [a, b]) {
+      if (o && o.tag === 'bird' && o.owner && o.owner.def.skillKey === 'titan' && !o.owner.dead) {
+        this.titanBlast(o.owner);
+        return;
+      }
+    }
     // 弹簧
     for (const [x, y] of [[a, b], [b, a]]) {
       if (x && x.tag === 'spring' && y && y !== x) {
@@ -305,6 +318,38 @@ class Game {
     Sfx.explode();
     this.explodeAt(x, y, 175, 520);
     this.fx.feathers(x, y, bird.def.body, 8);
+  }
+
+  /** 泰坦巨鸟的毁灭冲击：超大范围 + 高伤害，作为"一定打得过"的保底手段 */
+  titanBlast(bird) {
+    if (bird.dead) return;
+    const x = bird.x, y = bird.y;
+    bird.dead = true;
+    if (bird.body) { bird.body.removed = true; bird.body = null; }
+    this.fx.explosion(x, y, 430);
+    this.fx.flash = Math.max(this.fx.flash || 0, 0.6);
+    Sfx.explode();
+    this.fx.addShake(20);
+    this.fx.freeze(0.07);
+    this.explodeAt(x, y, 430, 3400);
+    this.fx.feathers(x, y, bird.def.body, 16);
+    // 全场余波：主爆炸范围外的猪也吃一发震击（900 足以秒掉含猪王在内的所有猪），
+    // 避免出现"已经救援了、却还差一只猪没清掉"的尴尬
+    for (const p of this.pigs) {
+      if (p.dead) continue;
+      if (len(p.x - x, p.y - y) <= 430) continue;
+      p.hurt(this, 900);
+    }
+    // 二次冲击波：把爆炸边缘的残余也一并震掉
+    this.pendingBooms.push({ x: x + 70, y: y + 30, t: 0.2 });
+    this.pendingBooms.push({ x: x - 70, y: y - 10, t: 0.34 });
+    this.pendingBooms.push({ x: x + 10, y: y - 80, t: 0.46 });
+  }
+
+  /** 空投白投下的炸弹：自由落体，碰到猪 / 砖块 / 地面即爆 */
+  dropEgg(x, y) {
+    this.drops.push({ x: x + 8, y: y + 14, vx: 0, vy: 140, r: 13, t: 0 });
+    Sfx.pop();
   }
 
   explodeAt(x, y, radius, damage) {
@@ -463,6 +508,32 @@ class Game {
       }
     }
 
+    // 空投炸弹下落（空投白技能）
+    for (let i = this.drops.length - 1; i >= 0; i--) {
+      const d = this.drops[i];
+      d.vy += GRAVITY * 1.4 * rdt;
+      d.x += d.vx * rdt;
+      d.y += d.vy * rdt;
+      d.t += rdt;
+      let hit = d.y > GROUND_Y - d.r * 0.5;
+      if (!hit) {
+        for (const p of this.pigs) {
+          if (!p.dead && dist2(d.x, d.y, p.x, p.y) < (p.r + d.r) * (p.r + d.r)) { hit = true; break; }
+        }
+      }
+      if (!hit) {
+        for (const b of this.blocks) {
+          if (!b.dead && Math.abs(d.x - b.x) < b.w / 2 + d.r && Math.abs(d.y - b.y) < b.h / 2 + d.r) { hit = true; break; }
+        }
+      }
+      if (hit || d.t > 4) {
+        this.drops.splice(i, 1);
+        this.fx.explosion(d.x, d.y, 170);
+        Sfx.explode();
+        this.explodeAt(d.x, d.y, 185, 560);
+      }
+    }
+
     // 小鸟逻辑
     for (const bd of this.birds) {
       if (bd.dead) continue;
@@ -477,6 +548,17 @@ class Game {
       }
       if (bd.state === 'flying') {
         bd.flyT = (bd.flyT || 0) + rdt;
+        // 泰坦（救援巨鸟）保证一定引爆：水平接近任意猪时立即引爆，
+        // 或飞行超过 2.4 秒强制引爆 —— 否则可能被强风吹出界而白白浪费救援
+        if (bd.def.skillKey === 'titan') {
+          let fire = bd.flyT > 2.4;
+          if (!fire && bd.flyT > 0.5) {
+            for (const p of this.pigs) {
+              if (!p.dead && Math.abs(p.x - bd.x) < 220) { fire = true; break; }
+            }
+          }
+          if (fire) { this.titanBlast(bd); continue; }
+        }
         if (bd.flyT > 9) {   // 保险：卡住太久强制收场
           bd.dead = true;
           if (bd.body) { bd.body.removed = true; bd.body = null; }
@@ -577,6 +659,19 @@ class Game {
       return;
     }
     if (!this.birdQueue.length) {
+      // 救援机制：小鸟用尽但猪还在 —— 赠送一只泰坦巨鸟（每关限一次），
+      // 确保玩家不会因为差一点点就卡关重来
+      if (!this.rescueUsed) {
+        this.rescueUsed = true;
+        this.birdQueue.push('giant');
+        this.phase = 'settle';
+        this.endTimer = 0.9;
+        this.showSkillHint('🚁 救援巨鸟登场！「泰坦巨力」撞击即引发毁灭爆炸，这一击必定清场');
+        Sfx.win();
+        this.fx.confetti(SLING.x, SLING.y - 150, 42);
+        this.emitState();
+        return;
+      }
       this.phase = 'losing'; this.endTimer = 1.1;
       Sfx.lose();
       return;
@@ -640,7 +735,9 @@ class Game {
     let x = SLING.x, y = SLING.y - 14, dx = vx, dy = vy;
     const pts = [];
     const step = 1 / 60;
-    for (let i = 0; i < 130; i++) {
+    this.aimHit = null;
+    // 模拟步数放大到 300（≈5 秒），保证远距离目标也能完整画出轨迹
+    for (let i = 0; i < 300; i++) {
       dx += this.world.wind * 0.42 * step;
       dy += GRAVITY * step;
       dx *= Math.exp(-0.1 * step); dy *= Math.exp(-0.03 * step);
@@ -648,8 +745,34 @@ class Game {
         if (Math.abs(x - f.x) < f.w / 2 && Math.abs(y - f.y) < f.h / 2) f.apply({ get vx() { return dx; }, set vx(v) { dx = v; }, get vy() { return dy; }, set vy(v) { dy = v; }, x, y }, step);
       }
       x += dx * step; y += dy * step;
-      if (i % 4 === 0) pts.push({ x, y });
-      if (y > GROUND_Y - 8 || x > WORLD_W || x < -100) break;
+      if (i % 3 === 0) pts.push({ x, y });
+      // 轨迹一旦压到猪 / 砖块就停在那里：末端即命中点，玩家能直观看到"打不打得中"
+      let hit = false;
+      for (const p of this.pigs) {
+        if (p.dead) continue;
+        if (dist2(x, y, p.x, p.y) < p.r * p.r) {
+          this.aimHit = { x: p.x, y: p.y, kind: 'pig' };
+          pts.push({ x: p.x, y: p.y });      // 让轨迹直接连到猪身上，不留空白
+          hit = true; break;
+        }
+      }
+      if (!hit) {
+        for (const bl of this.blocks) {
+          if (bl.dead) continue;
+          if (Math.abs(x - bl.x) < bl.w / 2 && Math.abs(y - bl.y) < bl.h / 2) {
+            this.aimHit = { x, y, kind: 'block' };
+            pts.push({ x, y });
+            hit = true; break;
+          }
+        }
+      }
+      if (hit) break;
+      if (y > GROUND_Y - 8) {
+        this.aimHit = { x, y: GROUND_Y - 8, kind: 'ground' };
+        pts.push({ x, y: GROUND_Y - 8 });
+        break;
+      }
+      if (x > WORLD_W || x < -100) break;
     }
     this.aimPoints = pts;
   }
@@ -693,6 +816,8 @@ class Game {
     for (const b of this.blocks) if (!b.dead) r.drawBlock(ctx, b);
     // 猪
     for (const p of this.pigs) if (!p.dead) r.drawPig(ctx, p, this.time);
+    // 空投炸弹（空投白）
+    for (const d of this.drops) r.drawEgg(ctx, d, this.time);
     // 鸟的拖尾
     for (const b of this.birds) {
       if (b.dead || b.state === 'ready') continue;
@@ -737,6 +862,7 @@ class Game {
 
     // 轨迹
     if (this.phase === 'aim' && this.drag.active) r.drawTrajectory(ctx, this.aimPoints);
+    if (this.phase === 'aim' && this.drag.active && this.aimHit) r.drawAimHit(ctx, this.aimHit, this.time);
     if (this.phase === 'aim' && this.prevPath.length) r.drawPrevPath(ctx, this.prevPath);
     r.drawAimUI(ctx, this.currentBird, this.drag, this.time);
 

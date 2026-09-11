@@ -180,7 +180,10 @@ console.log('— 技能与连锁 —');
       blue: g.birds.length === n0 + 2,
       black: b.fuse > 0,
       green: b.vx < 0,               // 回旋：水平方向反转（发射时为 +x）
-      violet: g.wells.length > 0     // 引力：生成了奇点
+      violet: g.wells.length > 0,    // 引力：生成了奇点
+      orange: b.r > BIRD_TYPES.orange.r * 1.5,   // 膨胀：半径显著变大
+      white: g.drops.length > 0,                 // 空投：生成了一枚炸弹
+      giant: b.dead === true                     // 泰坦：点击立即引爆自身
     }[t];
     for (let s = 0; s < 420; s++) { g.stepPhysics(1 / 120); g.updateGameplay(1 / 120, 1 / 120); }
     skills[t] = `${eff ? '生效' : '✗未生效'} 得分${g.score} 击杀${g.pigs.filter(p => p.dead).length}`;
@@ -193,6 +196,61 @@ console.log('— 技能与连锁 —');
   g.explodeAt(1200, 640, 200, 600);
   for (let s = 0; s < 240; s++) { g.stepPhysics(1 / 120); g.updateGameplay(1 / 120, 1 / 120); }
   console.log(`  TNT 连锁: 得分 ${g.score}，剩余砖块 ${g.blocks.length}，剩余猪 ${g.pigs.filter(p => !p.dead).length}`);
+}
+
+/* ---------- 4.2 救援巨鸟 / 瞄准命中 ---------- */
+console.log('— 救援机制与瞄准辅助 —');
+{
+  // 救援：小鸟用尽但猪还在 → 自动补一只泰坦巨鸟
+  const g = new Game(makeEl());
+  g.loadLevel(0);
+  g.birdQueue.length = 0;
+  g.currentBird = null;
+  const pigsLeft = g.pigs.filter(p => !p.dead).length;
+  g.afterShot();
+  const rescued = g.birdQueue.includes('giant') && g.rescueUsed === true;
+  console.log(`  ${rescued ? '✓' : '✗'} 鸟用尽自动补给泰坦巨鸟（剩猪 ${pigsLeft}）`);
+  if (!rescued) bad('救援巨鸟未触发');
+
+  // 救援每关仅一次
+  g.birdQueue.length = 0;
+  g.afterShot();
+  const onceOnly = g.birdQueue.length === 0 && g.phase === 'losing';
+  console.log(`  ${onceOnly ? '✓' : '✗'} 救援每关仅一次（再次用尽直接判负）`);
+  if (!onceOnly) bad('救援可被重复触发');
+
+  // 泰坦引爆：保底清场能力
+  const g2 = new Game(makeEl());
+  g2.loadLevel(7);
+  const tb = new Bird('giant', 1150, 620);
+  g2.birds.push(tb); g2.currentBird = tb;
+  const p0 = g2.pigs.filter(p => !p.dead).length;
+  g2.titanBlast(tb);
+  for (let s = 0; s < 360; s++) { g2.stepPhysics(1 / 120); g2.updateGameplay(1 / 120, 1 / 120); }
+  const p1 = g2.pigs.filter(p => !p.dead).length;
+  const titanOk = p1 < p0;
+  console.log(`  ${titanOk ? '✓' : '✗'} 泰坦毁灭冲击：剩猪 ${p0} → ${p1}`);
+  if (!titanOk) bad('泰坦爆炸未造成伤害');
+
+  // 瞄准预测：轨迹足够长，且能给出命中点
+  const g3 = new Game(makeEl());
+  g3.loadLevel(0);
+  g3.updateAimPreview(1150, -780);
+  const longEnough = g3.aimPoints.length > 8;
+  const hasHit = !!g3.aimHit;
+  console.log(`  ${longEnough && hasHit ? '✓' : '✗'} 轨迹预测：采样 ${g3.aimPoints.length} 点，命中点 ${g3.aimHit ? g3.aimHit.kind : '无'}`);
+  if (!longEnough) bad('瞄准轨迹过短');
+  if (!hasHit) bad('瞄准轨迹未给出命中点');
+
+  // 必须存在"轨迹直接压在猪头上"的角度
+  let pigAngle = null;
+  for (let a = 4; a <= 82; a += 2) {
+    const th = a * Math.PI / 180;
+    g3.updateAimPreview(Math.cos(th) * 1250, -Math.sin(th) * 1250);
+    if (g3.aimHit && g3.aimHit.kind === 'pig') { pigAngle = a; break; }
+  }
+  console.log(`  ${pigAngle !== null ? '✓' : '✗'} 存在可命中猪的瞄准角${pigAngle !== null ? `（${pigAngle}°）` : ''}`);
+  if (pigAngle === null) bad('没有任何角度能命中猪，轨迹停止逻辑可能有误');
 }
 
 /* ---------- 4.5 自动通关模拟（解析弹道 + 贪心瞄准） ---------- */

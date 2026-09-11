@@ -264,33 +264,78 @@ class Renderer {
 
   birdBody(ctx, b, ang, t, st) {
     const d = b.def, r = b.r;
-    // 尾羽
+    const light = d.skillKey === 'eggdrop';          // 亮色身体（空投白）需要不同明暗
+    const tailLen = d.skillKey === 'boomerang' ? 2.1 : 1.75;   // 回旋绿尾羽更长
+
+    // ---- 尾羽 ----
     ctx.save();
     const wag = Math.sin(t * 14) * 0.25 * (b.state === 'flying' ? 1 : 0.35);
     ctx.rotate(wag * 0.25);
     ctx.fillStyle = d.body2;
     ctx.beginPath();
     ctx.moveTo(-r * 0.55, -r * 0.2);
-    ctx.lineTo(-r * 1.75, -r * 0.85);
-    ctx.lineTo(-r * 1.45, 0);
-    ctx.lineTo(-r * 1.75, r * 0.75);
+    ctx.lineTo(-r * tailLen, -r * 0.86);
+    ctx.lineTo(-r * (tailLen - 0.28), 0);
+    ctx.lineTo(-r * tailLen, r * 0.76);
     ctx.lineTo(-r * 0.55, r * 0.35);
     ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,.16)'; ctx.lineWidth = r * 0.07; ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.66, -r * 0.1); ctx.lineTo(-r * (tailLen - 0.24), -r * 0.44);
+    ctx.moveTo(-r * 0.66, r * 0.14); ctx.lineTo(-r * (tailLen - 0.24), r * 0.34);
+    ctx.stroke();
     ctx.restore();
 
-    // 身体
+    // ---- 属性光环：引力紫（能量场）/ 泰坦（救援金光）----
+    if (d.skillKey === 'gravity' || d.rescue) {
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      const isT = !!d.rescue;
+      ctx.globalAlpha = isT ? 0.5 + Math.sin(t * 4) * 0.16 : 0.85;
+      const gg = ctx.createRadialGradient(0, 0, r * 0.82, 0, 0, r * (isT ? 1.6 : 1.72));
+      gg.addColorStop(0, isT ? 'rgba(255,206,80,.6)' : 'rgba(190,140,255,.5)');
+      gg.addColorStop(1, isT ? 'rgba(255,150,0,0)' : 'rgba(140,90,230,0)');
+      ctx.fillStyle = gg;
+      ctx.beginPath(); ctx.arc(0, 0, r * (isT ? 1.6 : 1.72), 0, TAU); ctx.fill();
+      ctx.restore();
+    }
+
+    // ---- 身体 ----
     const g = ctx.createRadialGradient(-r * 0.34, -r * 0.42, r * 0.12, 0, 0, r * 1.12);
     g.addColorStop(0, '#ffffff');
-    g.addColorStop(0.22, d.body);
+    g.addColorStop(light ? 0.55 : 0.22, d.body);
     g.addColorStop(1, d.body2);
     ctx.fillStyle = g;
     ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.fill();
 
-    // 肚皮
+    // 右下暗部：把球体的体积感压出来
+    ctx.save();
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.clip();
+    const sg = ctx.createRadialGradient(r * 0.5, r * 0.55, r * 0.2, r * 0.15, r * 0.25, r * 1.3);
+    sg.addColorStop(0, 'rgba(0,0,0,.2)');
+    sg.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = sg;
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.fill();
+    ctx.restore();
+
+    // 羽毛分缝
+    ctx.save();
+    ctx.strokeStyle = 'rgba(0,0,0,.12)'; ctx.lineWidth = r * 0.075; ctx.lineCap = 'round';
+    for (const [a0, a1, rr] of [[0.6, 1.04, 0.72], [0.7, 1.06, 0.52]]) {
+      ctx.beginPath();
+      ctx.arc(-r * 0.1, r * 0.06, r * rr, Math.PI * a0, Math.PI * a1);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // ---- 肚皮 ----
     ctx.fillStyle = d.belly;
     ctx.beginPath(); ctx.ellipse(r * 0.12, r * 0.42, r * 0.62, r * 0.44, 0.2, 0, TAU); ctx.fill();
+    ctx.globalAlpha = light ? 0.9 : 0.45;
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.ellipse(r * 0.06, r * 0.33, r * 0.3, r * 0.19, 0.2, 0, TAU); ctx.fill();
+    ctx.globalAlpha = 1;
 
-    // 翅膀（飞行时拍打）
+    // ---- 翅膀（飞行时拍打）----
     ctx.save();
     const flap = b.state === 'flying' ? Math.sin(t * 18) * 0.55 : Math.sin(t * 2.6) * 0.12;
     ctx.rotate(flap);
@@ -302,56 +347,77 @@ class Renderer {
     ctx.beginPath();
     ctx.ellipse(-r * 0.12, r * 0.06, r * 0.5, r * 0.2, -0.35, 0, TAU);
     ctx.fill();
+    // 飞羽刻线
+    ctx.strokeStyle = 'rgba(0,0,0,.13)'; ctx.lineWidth = r * 0.06;
+    for (let i = -1; i <= 1; i++) {
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.3 + i * r * 0.2, r * 0.02);
+      ctx.lineTo(-r * 0.46 + i * r * 0.2, r * 0.34);
+      ctx.stroke();
+    }
     ctx.restore();
 
-    // 头顶羽毛
+    // ---- 头顶羽毛（闪电黄更尖更高，辨识度更强）----
     ctx.fillStyle = d.body2;
-    for (const [ox, oy, a] of [[-r * 0.1, -r * 0.92, -0.5], [r * 0.12, -r * 1.0, -0.15], [r * 0.34, -r * 0.86, 0.2]]) {
+    const crest = d.skillKey === 'dash'
+      ? [[-r * 0.16, -r * 0.98, -0.66], [r * 0.06, -r * 1.16, -0.24], [r * 0.32, -r * 1.0, 0.18]]
+      : [[-r * 0.1, -r * 0.92, -0.5], [r * 0.12, -r * 1.0, -0.15], [r * 0.34, -r * 0.86, 0.2]];
+    for (const [ox, oy, a] of crest) {
       ctx.save(); ctx.translate(ox, oy); ctx.rotate(a);
       ctx.beginPath(); ctx.ellipse(0, 0, r * 0.3, r * 0.12, 0, 0, TAU); ctx.fill();
       ctx.restore();
     }
 
-    // 眼睛（看向速度方向）
+    // ---- 眼睛（看向速度方向）----
     const blink = (b.blink -= 0.016) < 0;
     if (blink && b.blink < -0.12) b.blink = rand(2.4, 6);
     const eyeY = -r * 0.28;
     const lookX = b.state === 'flying' ? clamp(Math.cos(ang) * 3, -1, 1) * r * 0.1 : r * 0.06;
     for (const ex of [-r * 0.22, r * 0.26]) {
+      ctx.fillStyle = 'rgba(0,0,0,.12)';                     // 眼窝阴影
+      ctx.beginPath(); ctx.ellipse(ex, eyeY + r * 0.03, r * 0.31, r * 0.33, 0, 0, TAU); ctx.fill();
       ctx.fillStyle = '#fff';
       ctx.beginPath(); ctx.ellipse(ex, eyeY, r * 0.3, r * 0.32, 0, 0, TAU); ctx.fill();
       if (!(blink)) {
         ctx.fillStyle = '#1b1b22';
         ctx.beginPath(); ctx.arc(ex + lookX + r * 0.05, eyeY + r * 0.02, r * 0.15, 0, TAU); ctx.fill();
         ctx.fillStyle = '#fff';
-        ctx.beginPath(); ctx.arc(ex + lookX + r * 0.1, eyeY - r * 0.08, r * 0.06, 0, TAU); ctx.fill();
+        ctx.beginPath(); ctx.arc(ex + lookX + r * 0.1, eyeY - r * 0.08, r * 0.065, 0, TAU); ctx.fill();
+        ctx.globalAlpha = 0.65;                              // 第二高光，眼神更"活"
+        ctx.beginPath(); ctx.arc(ex + lookX - r * 0.02, eyeY + r * 0.12, r * 0.035, 0, TAU); ctx.fill();
+        ctx.globalAlpha = 1;
       }
     }
     // 愤怒眉毛
-    ctx.strokeStyle = d.body2; ctx.lineWidth = r * 0.16; ctx.lineCap = 'round';
+    ctx.strokeStyle = d.body2; ctx.lineWidth = r * 0.17; ctx.lineCap = 'round';
     ctx.beginPath();
-    ctx.moveTo(-r * 0.5, -r * 0.66); ctx.lineTo(-r * 0.06, -r * 0.42);
-    ctx.moveTo(r * 0.5, -r * 0.72); ctx.lineTo(r * 0.06, -r * 0.46);
+    ctx.moveTo(-r * 0.5, -r * 0.68); ctx.lineTo(-r * 0.06, -r * 0.43);
+    ctx.moveTo(r * 0.5, -r * 0.74); ctx.lineTo(r * 0.06, -r * 0.47);
     ctx.stroke();
 
-    // 喙
+    // ---- 喙（上下两片 + 中缝，立体感更强）----
     const beakY = r * 0.06;
-    ctx.fillStyle = '#ffb02e';
+    const beakLen = d.skillKey === 'dash' ? 1.44 : 1.24;
+    ctx.fillStyle = '#ffc44d';
     ctx.beginPath();
-    ctx.moveTo(r * 0.5, beakY - r * 0.2);
-    ctx.lineTo(r * 1.24, beakY);
-    ctx.lineTo(r * 0.5, beakY + r * 0.22);
+    ctx.moveTo(r * 0.5, beakY - r * 0.21);
+    ctx.lineTo(r * beakLen, beakY - r * 0.02);
+    ctx.lineTo(r * 0.5, beakY + r * 0.02);
     ctx.closePath(); ctx.fill();
-    ctx.fillStyle = '#d98a12';
+    ctx.fillStyle = '#e0900f';
     ctx.beginPath();
     ctx.moveTo(r * 0.5, beakY + r * 0.02);
-    ctx.lineTo(r * 1.24, beakY);
-    ctx.lineTo(r * 0.52, beakY + r * 0.22);
+    ctx.lineTo(r * beakLen, beakY - r * 0.02);
+    ctx.lineTo(r * 0.52, beakY + r * 0.24);
     ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = 'rgba(120,60,0,.5)'; ctx.lineWidth = r * 0.05;
+    ctx.beginPath(); ctx.moveTo(r * 0.52, beakY + r * 0.02); ctx.lineTo(r * beakLen, beakY - r * 0.02); ctx.stroke();
 
-    // 高光
-    ctx.fillStyle = 'rgba(255,255,255,.35)';
-    ctx.beginPath(); ctx.ellipse(-r * 0.3, -r * 0.5, r * 0.34, r * 0.18, -0.6, 0, TAU); ctx.fill();
+    // ---- 主高光 ----
+    ctx.fillStyle = 'rgba(255,255,255,.38)';
+    ctx.beginPath(); ctx.ellipse(-r * 0.32, -r * 0.52, r * 0.34, r * 0.18, -0.6, 0, TAU); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.2)';
+    ctx.beginPath(); ctx.ellipse(-r * 0.16, -r * 0.66, r * 0.16, r * 0.09, -0.6, 0, TAU); ctx.fill();
 
     if (b.armedBlast) {
       ctx.save(); ctx.globalCompositeOperation = 'lighter';
@@ -772,19 +838,77 @@ class Renderer {
   }
 
   /* ---------------- 瞄准辅助 ---------------- */
-  drawTrajectory(ctx, pts, alpha = 0.75) {
+  drawTrajectory(ctx, pts, alpha = 0.92) {
     if (!pts.length) return;
     ctx.save();
-    for (let i = 0; i < pts.length; i++) {
+    const n = pts.length;
+    for (let i = 0; i < n; i++) {
       const p = pts[i];
-      const a = alpha * (1 - i / pts.length) * 0.9;
+      const k = i / n;
+      // 末端保留最低可见度（不再渐隐到看不见），玩家能一直看到落点
+      const a = alpha * (1 - k * 0.5);
       ctx.globalAlpha = a;
       ctx.fillStyle = '#fff';
-      ctx.beginPath(); ctx.arc(p.x, p.y, 4.2 - i / pts.length * 1.6, 0, TAU); ctx.fill();
-      ctx.globalAlpha = a * 0.45;
+      ctx.beginPath(); ctx.arc(p.x, p.y, 4.6 - k * 1.3, 0, TAU); ctx.fill();
+      ctx.globalAlpha = a * 0.42;
       ctx.fillStyle = '#ffd36e';
-      ctx.beginPath(); ctx.arc(p.x, p.y, 7 - i / pts.length * 2, 0, TAU); ctx.fill();
+      ctx.beginPath(); ctx.arc(p.x, p.y, 7.4 - k * 1.7, 0, TAU); ctx.fill();
     }
+    ctx.restore();
+  }
+
+  /** 命中点标记：轨迹末端落在猪/砖块/地面时的准星 */
+  drawAimHit(ctx, hit, t) {
+    const onPig = hit.kind === 'pig';
+    const R = onPig ? 26 : 17;
+    const pulse = 1 + Math.sin(t * 9) * 0.13;
+    ctx.save();
+    ctx.translate(hit.x, hit.y);
+    ctx.strokeStyle = onPig ? '#ff4d4d' : 'rgba(255,255,255,.92)';
+    ctx.lineWidth = 3;
+    ctx.globalAlpha = 0.95;
+    ctx.beginPath(); ctx.arc(0, 0, R * pulse, 0, TAU); ctx.stroke();
+    ctx.globalAlpha = 0.42;
+    ctx.beginPath(); ctx.arc(0, 0, R * pulse * 1.55, 0, TAU); ctx.stroke();
+    // 四向准星刻线
+    ctx.globalAlpha = 0.95;
+    ctx.lineWidth = 2.4;
+    for (const a of [0, Math.PI / 2]) {
+      const cx = Math.cos(a), cy = Math.sin(a);
+      ctx.beginPath();
+      ctx.moveTo(cx * R * 1.15, cy * R * 1.15); ctx.lineTo(cx * R * 1.75, cy * R * 1.75);
+      ctx.moveTo(-cx * R * 1.15, -cy * R * 1.15); ctx.lineTo(-cx * R * 1.75, -cy * R * 1.75);
+      ctx.stroke();
+    }
+    if (onPig) {
+      ctx.globalAlpha = 0.9;
+      ctx.fillStyle = '#ff4d4d';
+      ctx.beginPath(); ctx.arc(0, 0, 4, 0, TAU); ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  /** 空投炸弹 */
+  drawEgg(ctx, d, t) {
+    ctx.save();
+    ctx.translate(d.x, d.y);
+    // 尾焰
+    ctx.globalAlpha = 0.35;
+    ctx.fillStyle = '#ffd36e';
+    ctx.beginPath(); ctx.ellipse(0, -d.r * 1.1, d.r * 0.45, d.r * 0.9, 0, 0, TAU); ctx.fill();
+    ctx.globalAlpha = 1;
+    const g = ctx.createRadialGradient(-d.r * 0.3, -d.r * 0.35, d.r * 0.1, 0, 0, d.r * 1.1);
+    g.addColorStop(0, '#ffffff');
+    g.addColorStop(0.5, '#f4f6f9');
+    g.addColorStop(1, '#b9c2cf');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.ellipse(0, 0, d.r * 0.86, d.r, 0, 0, TAU); ctx.fill();
+    ctx.strokeStyle = 'rgba(120,130,145,.7)'; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.ellipse(0, 0, d.r * 0.86, d.r, 0, 0, TAU); ctx.stroke();
+    // 引信闪烁
+    const bl = 0.5 + Math.sin(t * 22) * 0.5;
+    ctx.fillStyle = `rgba(255,120,60,${0.35 + bl * 0.5})`;
+    ctx.beginPath(); ctx.arc(0, -d.r * 1.15, 4 + bl * 2, 0, TAU); ctx.fill();
     ctx.restore();
   }
 

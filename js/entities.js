@@ -44,6 +44,25 @@ const BIRD_TYPES = {
     r: 22, mass: 1.1, power: 0.95, restitution: 0.2,
     body: '#9b5cf0', body2: '#5f2ea8', belly: '#ecdcff',
     hint: '空中点击 → 制造引力场，把周围全吸过来'
+  },
+  orange: {
+    name: '爆胀橙', skill: '膨胀冲击', skillKey: 'inflate',
+    r: 19, mass: 0.8, power: 0.95, restitution: 0.26,
+    body: '#ff8c1a', body2: '#c25a00', belly: '#ffe9c4',
+    hint: '空中点击 → 体型膨胀近一倍，撞击力暴增'
+  },
+  white: {
+    name: '空投白', skill: '空投炸弹', skillKey: 'eggdrop',
+    r: 22, mass: 0.95, power: 0.95, restitution: 0.22,
+    body: '#f2f5f9', body2: '#8b98ab', belly: '#ffffff',
+    hint: '空中点击 → 向下投掷炸弹，落地即爆'
+  },
+  giant: {
+    name: '泰坦巨力', skill: '毁灭冲击', skillKey: 'titan',
+    r: 40, mass: 2.8, power: 1.3, restitution: 0.16,
+    body: '#e0362c', body2: '#8f1a12', belly: '#ffe3b8',
+    hint: '救援巨鸟：体型庞大，撞击即引发大范围爆炸',
+    rescue: true
   }
 };
 
@@ -125,6 +144,22 @@ class Bird {
       game.spawnWell(this.x, this.y, 1.25);
       game.fx.burst(this.x, this.y, { count: 26, color: '#c8a2ff', type: 'dot', spMax: 320, grav: 0 });
       game.fx.addShake(7);
+    } else if (k === 'inflate') {
+      // 爆胀橙：体型膨胀近一倍，半径 / 质量 / 冲力同步提升
+      this.r = this.def.r * 1.9;
+      if (this.body) { this.body.r = this.r; this.body.mass = this.def.mass * 2.6; this.body.wake(); }
+      this.power = 1.55;
+      game.fx.burst(this.x, this.y, { count: 24, color: '#ffb454', type: 'spark', spMax: 430, grav: 140 });
+      game.fx.addShake(6);
+    } else if (k === 'eggdrop') {
+      // 空投白：向下投出一枚炸弹，落地/命中即爆
+      game.dropEgg(this.x, this.y);
+      game.fx.burst(this.x, this.y, { count: 12, color: '#ffffff', type: 'dot', spMax: 240 });
+    } else if (k === 'titan') {
+      // 泰坦：手动点击立即引爆（被动撞击 / 超时也会自动引爆），
+      // 走毁灭冲击而非普通爆炸，保证"救援即通关"
+      game.titanBlast(this);
+      return true;
     }
     game.syncBird(this);
     return true;

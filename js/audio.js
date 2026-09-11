@@ -100,6 +100,9 @@ const Sfx = {
     else if (kind === 'bomb') { this.tone(200, 0.3, 'square', 0.16, 60); }
     else if (kind === 'boomerang') { this.tone(520, 0.22, 'sine', 0.2, 1500); this.tone(1500, 0.18, 'sine', 0.12, 520, null, 0.08); }
     else if (kind === 'gravity') { this.tone(120, 0.5, 'sine', 0.2, 40); this.noise(0.45, 0.14, 600, 'lowpass', 120); }
+    else if (kind === 'inflate') { this.tone(240, 0.32, 'triangle', 0.22, 540); this.tone(480, 0.26, 'sine', 0.14, 860, null, 0.06); }
+    else if (kind === 'eggdrop') { this.tone(760, 0.12, 'square', 0.16, 300); this.noise(0.2, 0.13, 1300, 'lowpass'); }
+    else if (kind === 'titan') { this.tone(90, 0.62, 'sawtooth', 0.3, 28); this.noise(0.55, 0.32, 950, 'lowpass', 70); }
     else { this.tone(420, 0.18, 'triangle', 0.2, 900); }
   },
   spring() { this.tone(300, 0.16, 'sine', 0.24, 1100); this.tone(600, 0.1, 'sine', 0.14, 1400, null, 0.05); },

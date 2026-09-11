@@ -477,14 +477,33 @@ html, body {
   font-size:clamp(16px,2.7vh,31px); line-height:1;
   filter:drop-shadow(0 2px 4px rgba(160,110,50,.3));
 }
+/* 小鸟图鉴：立绘卡片（用 Canvas 实时绘制，与游戏内形象一致） */
 .bird-legend {
-  display:flex; gap:.45em; flex-wrap:wrap;
-  font-size:clamp(8.5px,1.3vh,15px); color:#5b3a16; font-weight:700;
+  display:grid;
+  grid-template-columns:repeat(5, 1fr);   /* 固定 5 列：9 只鸟排成 5+4，两行均衡且立绘够大 */
+  gap:clamp(6px,1vh,13px);
+  flex:1 1 auto; min-width:0;
 }
-.bird-legend span {
-  background:rgba(255,255,255,.78); padding:.28em .66em; border-radius:var(--r-pill);
-  border:1px solid rgba(200,150,80,.4);
-  box-shadow:0 1px 3px rgba(160,110,50,.12);
+.legend-card {
+  display:flex; flex-direction:column; align-items:center;
+  gap:.12em;
+  padding:clamp(3px,.6vh,8px) clamp(3px,.5vh,7px) clamp(4px,.8vh,9px);
+  border-radius:var(--r-card);
+  background:radial-gradient(circle at 50% 24%, rgba(255,255,255,.94), rgba(255,246,229,.74));
+  border:2px solid rgba(210,160,90,.34);
+  box-shadow:0 2px 8px rgba(160,110,50,.12), inset 0 1px 0 #fff;
+  transition:transform var(--t-fast) var(--ease-out), box-shadow var(--t-fast);
+}
+.legend-card:hover { transform:translateY(-3px); box-shadow:0 7px 16px rgba(160,110,50,.22), inset 0 1px 0 #fff; }
+.legend-canvas { width:clamp(66px,9vh,100px); height:auto; aspect-ratio:1 / 1; display:block; }
+.legend-info { display:flex; flex-direction:column; align-items:center; line-height:1.25; text-align:center; }
+.legend-name { font-size:clamp(9px,1.32vh,15px); color:#5b3a16; }
+.legend-skill { font-size:clamp(7.5px,1.08vh,12px); color:#a8560f; }
+/* 救援巨鸟：金色描边强调其特殊性 */
+.legend-card.rescue {
+  border-color:rgba(240,180,60,.85);
+  background:radial-gradient(circle at 50% 24%, #fffdf3, #fff1cb);
+  box-shadow:0 3px 12px rgba(230,160,40,.28), inset 0 1px 0 #fff;
 }
 
 /* ============ 结算 ============ */
@@ -888,6 +907,7 @@ html, body {
 /* 窄屏 */
 @media (max-width: 900px) {
   .howto-grid { grid-template-columns:repeat(2, 1fr); }
+  .bird-legend { grid-template-columns:repeat(auto-fit, minmax(clamp(76px,10.4vh,112px), 1fr)); }
   .panel { padding:clamp(14px,2.6vh,26px) clamp(14px,3vw,30px); min-width:min(440px, 92vw); max-height:92%; }
   .panel-wide { min-width:92%; }
 }
@@ -985,15 +1005,35 @@ html, body {
     max-height:94%;
   }
   .panel-title { font-size:clamp(17px,2.9vh,32px); }
-  /* 玩法说明改为两列竖排卡片：一屏能装下 6 条，避免长到要滚动 */
-  .howto-grid { grid-template-columns:repeat(2, 1fr); gap:clamp(6px,1vh,12px); }
+  /* 玩法说明：两列卡片 + 3×3 图鉴，压缩高度让"6 条说明 + 9 只图鉴"尽量一屏放下 */
+  .howto-grid { grid-template-columns:repeat(2, 1fr); gap:clamp(5px,.85vh,10px); }
   .howto-card {
     flex-direction:column; align-items:center; text-align:center;
-    gap:.34em;
-    padding:clamp(8px,1.25vh,15px) clamp(7px,1.1vh,13px);
-    font-size:clamp(9.5px,1.42vh,15px); line-height:1.5;
+    gap:.28em;
+    padding:clamp(6px,1vh,12px) clamp(6px,.95vh,11px);
+    font-size:clamp(9px,1.32vh,14px); line-height:1.45;
   }
-  .howto-ico { font-size:clamp(17px,2.5vh,28px); }
+  .howto-ico { font-size:clamp(15px,2.2vh,25px); }
+  /* 底栏改纵向：图鉴网格在上，返回按钮独占一行并撑满宽度
+     （此前按钮被挤成右侧一个孤立小圆按钮，既难按也与面板风格不统一） */
+  .panel-foot {
+    flex-direction:column;
+    align-items:stretch;
+    gap:clamp(6px,1vh,12px);
+    /* 滚动时底栏浮在内容之上，背景必须足够实，否则上方卡片文字会透出来 */
+    background:linear-gradient(180deg, rgba(255,247,233,.15), rgba(255,247,233,.99) 24%, var(--panel-2) 100%);
+  }
+  .panel-foot .btn-small {
+    width:100%;
+    padding:.6em 1em;
+    font-size:clamp(11px,1.65vh,17px);
+  }
+  /* 竖屏固定 3 列：9 只鸟正好 3×3，整齐且每只都能看清 */
+  .bird-legend { grid-template-columns:repeat(3, 1fr); gap:clamp(4px,.75vh,9px); }
+  .legend-card { padding:clamp(2px,.45vh,6px) clamp(2px,.4vh,5px) clamp(3px,.65vh,7px); }
+  .legend-canvas { width:clamp(44px,6.4vh,64px); }
+  .legend-name { font-size:clamp(8.5px,1.24vh,14px); }
+  .legend-skill { font-size:clamp(7px,1vh,11px); }
   .egg-card { padding:clamp(10px,1.8vh,20px) clamp(10px,1.5vh,18px); min-height:0; }
   .egg-card-title { font-size:clamp(15px,2.5vh,28px); }
   .pause-stats { font-size:clamp(10.5px,1.6vh,18px); }
@@ -1015,7 +1055,7 @@ html, body {
     font-size:clamp(10px,1.5vh,15px);
     padding:.42em 1.05em;
   }
-  #rotate-tip.autofade { animation:tipFade 1s var(--ease-out) 4.5s forwards; }
+  #rotate-tip.autofade { animation:tipFade 1s var(--ease-out) 3.2s forwards; }
 }
 
 @keyframes tipFade {

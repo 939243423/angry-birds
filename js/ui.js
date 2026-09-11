@@ -248,13 +248,49 @@ const UI = {
 
   buildLegend() {
     const el = $('bird-legend');
+    if (!el) return;
     el.innerHTML = '';
     for (const k in BIRD_TYPES) {
       const d = BIRD_TYPES[k];
-      const s = document.createElement('span');
-      s.innerHTML = `<b style="color:${d.body}">●</b> ${d.name}：${d.skill}`;
-      el.appendChild(s);
+      const card = document.createElement('div');
+      card.className = 'legend-card' + (d.rescue ? ' rescue' : '');
+      const cv = document.createElement('canvas');
+      cv.width = 132; cv.height = 132;      // 2x 分辨率，窄屏下也清晰
+      cv.className = 'legend-canvas';
+      const info = document.createElement('div');
+      info.className = 'legend-info';
+      const nm = document.createElement('b');
+      nm.className = 'legend-name';
+      nm.textContent = d.name;
+      const sk = document.createElement('span');
+      sk.className = 'legend-skill';
+      sk.textContent = d.rescue ? `救援 · ${d.skill}` : d.skill;
+      info.appendChild(nm); info.appendChild(sk);
+      card.appendChild(cv); card.appendChild(info);
+      el.appendChild(card);
+      this.drawLegendBird(cv, d);
     }
+  },
+
+  /** 在图鉴小画布上绘制该小鸟的立绘（复用游戏内的绘制函数，保证风格一致） */
+  drawLegendBird(cv, def) {
+    const ctx = cv && cv.getContext ? cv.getContext('2d') : null;
+    if (!ctx || !this.game || !this.game.renderer) return;
+    const W = cv.width, H = cv.height;
+    ctx.clearRect(0, 0, W, H);
+    // 统一视觉大小：把不同半径的鸟缩放到同一尺度，泰坦略放大以体现"巨力"
+    const base = Math.min(W, H) * 0.5;
+    const scale = (base * 0.62 / def.r) * (def.rescue ? 1.14 : 1);
+    ctx.save();
+    // 鸟的横向范围约为 [-1.75r(尾), +1.24r(喙)]，整体重心偏右，故左移一点才真正居中
+    ctx.translate(W * 0.5 + def.r * scale * 0.26, H * 0.53 + def.r * scale * 0.1);
+    ctx.scale(scale, scale);
+    const fake = {
+      def, r: def.r, state: 'idle', blink: 3, squash: 0,
+      armedBlast: false, fuse: 0, x: 0, y: 0, vx: 0, vy: 0
+    };
+    this.game.renderer.birdBody(ctx, fake, 0, 1.6, 0);
+    ctx.restore();
   },
 
   refreshMenu() {
