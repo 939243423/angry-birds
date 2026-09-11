@@ -1,0 +1,288 @@
+/* 冒烟自检：mock DOM 后加载全部脚本
+ * 1) 关卡构建合法性  2) 物理稳定性  3) 弹道可解性  4) 技能/爆炸  5) 彩蛋关可通关性 */
+const fs = require('fs'), path = require('path'), vm = require('vm');
+
+const grad = { addColorStop() { } };
+function makeCtx() {
+  return new Proxy({}, {
+    get(t, p) {
+      if (p in t) return t[p];
+      if (p === 'createLinearGradient' || p === 'createRadialGradient') return () => grad;
+      if (p === 'measureText') return () => ({ width: 10 });
+      if (p === 'canvas') return { width: 1600, height: 900 };
+      return () => { };
+    }, set(t, p, v) { t[p] = v; return true; }
+  });
+}
+function makeEl() {
+  return {
+    width: 1600, height: 900, style: {}, textContent: '', innerHTML: '', title: '',
+    classList: { _s: new Set(), add(c) { this._s.add(c); }, remove(c) { this._s.delete(c); }, toggle(c, f) { f ? this._s.add(c) : this._s.delete(c); }, contains(c) { return this._s.has(c); } },
+    getContext: () => makeCtx(),
+    getBoundingClientRect: () => ({ left: 0, top: 0, width: 1600, height: 900 }),
+    appendChild() { }, addEventListener() { }, querySelector: () => makeEl(), querySelectorAll: () => [],
+    get offsetWidth() { return 100; }
+  };
+}
+const els = {};
+global.document = {
+  getElementById: id => (els[id] = els[id] || makeEl()),
+  createElement: () => makeEl(),
+  addEventListener() { },
+  querySelector: () => makeEl(),
+  querySelectorAll: (sel) => {
+    const m = /^#([\w-]+)/.exec(sel);
+    if (m) { const e = els[m[1]] || (els[m[1]] = makeEl()); return [e]; }
+    return [];
+  },
+  documentElement: { style: { setProperty() { } }, classList: { add() { }, remove() { }, toggle() { } } },
+  body: { classList: { add() { }, remove() { }, toggle() { } } }
+};
+global.window = { addEventListener() { }, devicePixelRatio: 1, innerWidth: 1600, innerHeight: 900 };
+global.navigator = { maxTouchPoints: 0 };
+global.performance = { now: () => Date.now() };
+global.requestAnimationFrame = () => 0;
+const store = {};
+global.localStorage = { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = v; } };
+global.confirm = () => false;
+
+const dir = path.join(__dirname, '..', 'js');
+const files = ['utils.js', 'audio.js', 'particles.js', 'physics.js', 'entities.js', 'levels.js', 'render.js', 'egggame.js', 'game.js', 'ui.js'];
+for (const f of files.slice(0, -1))
+  vm.runInThisContext(fs.readFileSync(path.join(dir, f), 'utf8'), { filename: f });
+
+let fail = 0;
+const bad = m => { console.log('  ✗ ' + m); fail++; };
+
+/* ---------- 0. DOM 引用完整性 ---------- */
+console.log('— DOM 引用完整性 —');
+{
+  const root = path.join(__dirname, '..');
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const ids = new Set([...html.matchAll(/id="([^"]+)"/g)].map(m => m[1]));
+  const js = files.map(f => fs.readFileSync(path.join(dir, f), 'utf8')).join('\n')
+    + fs.readFileSync(path.join(dir, 'ui.js'), 'utf8');
+  const refs = new Set([
+    ...[...js.matchAll(/\$\('([^']+)'\)/g)].map(m => m[1]),
+    ...[...js.matchAll(/getElementById\('([^']+)'\)/g)].map(m => m[1])
+  ]);
+  const missing = [...refs].filter(r => !ids.has(r));
+  if (missing.length) bad('HTML 中缺少这些 id: ' + missing.join(', '));
+  else console.log(`  ✓ 脚本引用的 ${refs.size} 个 id 全部存在`);
+
+  // CSS 中定义但 HTML 未使用的关键类（提示性）
+  const css = fs.readFileSync(path.join(root, 'css', 'style.css'), 'utf8');
+  for (const cls of ['egg-card', 'egg-diff', 'egg-desc', 'level-cell', 'howto-card', 'star-big', 'bird-legend']) {
+    if (!css.includes('.' + cls)) bad('CSS 缺少样式类 .' + cls);
+  }
+  if (!css.includes('#rotate-tip')) bad('CSS 缺少 #rotate-tip 样式');
+  console.log('  ✓ 关键样式类齐全');
+}
+
+/* ---------- 1. 关卡构建 ---------- */
+console.log('— 关卡构建 —');
+for (let i = 0; i < LEVELS.length; i++) {
+  const def = buildLevel(i), errs = [];
+  for (const b of def.blocks) {
+    if (![b.x, b.y, b.w, b.h].every(isFinite)) errs.push('block NaN');
+    if (b.y + b.h / 2 > GROUND_Y + 2) errs.push(`block 陷入地面 ${(b.y + b.h / 2).toFixed(0)}`);
+    if (b.x - b.w / 2 < 0 || b.x + b.w / 2 > 1800) errs.push('block 越界');
+    if (!MATERIALS[b.mat]) errs.push('未知材质 ' + b.mat);
+  }
+  for (const p of def.pigs) {
+    if (!isFinite(p.x) || !isFinite(p.y)) errs.push('pig NaN');
+    if (p.y > GROUND_Y + 1 && !p.balloon) errs.push(`pig 陷入地面 ${p.y.toFixed(0)}`);
+    if (!PIG_TYPES[p.type]) errs.push('未知猪类型');
+  }
+  for (const b of def.birds) if (!BIRD_TYPES[b]) errs.push('未知鸟类型 ' + b);
+  if (!def.pigs.length) errs.push('没有猪');
+  const u = [...new Set(errs)];
+  console.log(`  第${i + 1}关 ${def.name}: 砖${def.blocks.length} 猪${def.pigs.length} 鸟${def.birds.length} 机关${def.springs.length + def.portals.length + def.fans.length} ${u.length ? '✗ ' + u.join('; ') : '✓'}`);
+  if (u.length) fail++;
+}
+
+/* ---------- 2. 物理稳定性 ---------- */
+console.log('— 物理空跑（每关 720 步） —');
+for (let i = 0; i < LEVELS.length; i++) {
+  const g = new Game(makeEl());
+  g.loadLevel(i);
+  let err = null;
+  try {
+    for (let s = 0; s < 720; s++) {
+      g.stepPhysics(1 / 120);
+      if (s % 120 === 0) {
+        for (const b of g.blocks) if (!isFinite(b.x) || !isFinite(b.y)) throw new Error('block NaN');
+        for (const p of g.pigs) if (!isFinite(p.x) || !isFinite(p.y)) throw new Error('pig NaN');
+      }
+    }
+  } catch (e) { err = e; }
+  const drift = g.blocks.reduce((m, b) => Math.max(m, Math.abs(b.y - b.body.y)), 0);
+  console.log(`  第${i + 1}关: ${err ? '✗ ' + err.message : '✓'} (同步误差 ${drift.toFixed(4)}px)`);
+  if (err) fail++;
+}
+
+/* ---------- 3. 弹道可解性（暴力搜索发射参数） ---------- */
+console.log('— 弹道可解性（搜索 角度×力度） —');
+for (let i = 0; i < LEVELS.length; i++) {
+  let best = null, hits = 0, tries = 0;
+  for (let ang = 14; ang <= 72; ang += 4) {
+    for (let pw = 0.45; pw <= 1.001; pw += 0.05) {
+      tries++;
+      const g = new Game(makeEl());
+      g.loadLevel(i);
+      const bird = g.currentBird;
+      const a = -ang * Math.PI / 180;
+      const v = MAX_STRETCH * pw * SLING_POWER;
+      g.launch(bird, Math.cos(a) * v, Math.sin(a) * v);
+      let minD = 1e9;
+      for (let s = 0; s < 420; s++) {
+        g.stepPhysics(1 / 120);
+        g.updateGameplay(1 / 120, 1 / 120);
+        for (const p of g.pigs) if (!p.dead) minD = Math.min(minD, len(p.x - bird.x, p.y - bird.y) - p.r - bird.r);
+        if (bird.dead) break;
+      }
+      const killed = g.pigs.filter(p => p.dead).length;
+      if (killed > 0 || minD < 40) hits++;
+      const better = !best || killed > best.killed || (killed === best.killed && g.score > best.score);
+      if (better) best = { ang, pw, score: g.score, killed, minD };
+    }
+  }
+  const ok = hits > 0;
+  console.log(`  第${i + 1}关: ${ok ? '✓' : '✗ 无解'} 命中组合 ${hits}/${tries}，最佳 角度${best.ang}° 力度${(best.pw * 100) | 0}% 击杀${best.killed} 分${best.score}`);
+  if (!ok) fail++;
+}
+
+/* ---------- 4. 技能 / 爆炸 ---------- */
+console.log('— 技能与连锁 —');
+{
+  const skills = {};
+  for (const t of Object.keys(BIRD_TYPES)) {
+    const g = new Game(makeEl());
+    g.loadLevel(2);
+    const b = new Bird(t, SLING.x, SLING.y - 14);
+    g.birds.push(b); g.currentBird = b;
+    g.launch(b, 900, -520);
+    for (let s = 0; s < 36; s++) { g.stepPhysics(1 / 120); g.updateGameplay(1 / 120, 1 / 120); }
+    const sp0 = len(b.vx, b.vy), n0 = g.birds.length;
+    b.useSkill(g);
+    const eff = {
+      red: b.armedBlast === true,
+      yellow: len(b.vx, b.vy) > sp0 * 1.8,
+      blue: g.birds.length === n0 + 2,
+      black: b.fuse > 0
+    }[t];
+    for (let s = 0; s < 420; s++) { g.stepPhysics(1 / 120); g.updateGameplay(1 / 120, 1 / 120); }
+    skills[t] = `${eff ? '生效' : '✗未生效'} 得分${g.score} 击杀${g.pigs.filter(p => p.dead).length}`;
+    if (!eff) bad(`${t} 技能未生效`);
+  }
+  console.log('  技能验证:', JSON.stringify(skills, null, 0));
+
+  const g = new Game(makeEl());
+  g.loadLevel(2);
+  g.explodeAt(1200, 640, 200, 600);
+  for (let s = 0; s < 240; s++) { g.stepPhysics(1 / 120); g.updateGameplay(1 / 120, 1 / 120); }
+  console.log(`  TNT 连锁: 得分 ${g.score}，剩余砖块 ${g.blocks.length}，剩余猪 ${g.pigs.filter(p => !p.dead).length}`);
+}
+
+/* ---------- 4.5 自动通关模拟（解析弹道 + 贪心瞄准） ---------- */
+console.log('— 自动通关模拟（贪心瞄准，每关最多用尽小鸟） —');
+function solveV(x0, y0, x1, y1, angDeg) {
+  const th = angDeg * Math.PI / 180;
+  const dx = x1 - x0, dy = y1 - y0;
+  if (dx <= 10) return null;
+  const denom = Math.cos(th) ** 2 * (dy + Math.tan(th) * dx);
+  if (denom <= 0) return null;
+  return Math.sqrt(0.5 * GRAVITY * dx * dx / denom);
+}
+for (let i = 0; i < LEVELS.length; i++) {
+  const g = new Game(makeEl());
+  g.loadLevel(i);
+  const maxV = MAX_STRETCH * SLING_POWER;
+  let shots = 0;
+  while (shots < 10 && g.phase === 'aim' && g.currentBird) {
+    const bird = g.currentBird;
+    let best = null;
+    for (const p of g.pigs.filter(x => !x.dead)) {
+      for (const angDeg of [18, 24, 30, 36, 42, 48, 56, 64]) {
+        const v = solveV(bird.x, bird.y, p.x, p.y, angDeg);
+        if (!v || v > maxV) continue;
+        if (!best || v < best.v) best = { v, angDeg, p };
+      }
+    }
+    if (!best) best = { v: maxV * 0.92, angDeg: 42 };
+    const a = -best.angDeg * Math.PI / 180;
+    const fired = g.birds[g.birds.length - 1];
+    const beforeScore = g.score, beforePigs = g.pigs.filter(p => !p.dead).length;
+    g.launch(bird, Math.cos(a) * best.v, Math.sin(a) * best.v);
+    shots++;
+    let guard = 0;
+    while (g.phase !== 'aim' && g.phase !== 'win' && g.phase !== 'lose' && guard++ < 4000) g.update(1 / 120);
+    if (process.env.AB_TRACE) {
+      const d = Math.min(...g.pigs.filter(p => !p.dead).map(p => len(p.x - fired.x, p.y - fired.y)), 9999);
+      console.log(`    #${shots} ${bird.type} 角${best.angDeg}° v=${best.v.toFixed(0)} → 停在(${fired.x.toFixed(0)},${fired.y.toFixed(0)}) 最近猪${d.toFixed(0)}px 得分+${g.score - beforeScore} 杀${beforePigs - g.pigs.filter(p => !p.dead).length}`);
+    }
+  }
+  const left = g.pigs.filter(p => !p.dead).length;
+  const total = g.level.pigs.length;
+  const stars = g.level.stars.reduce((s, v) => s + (g.score >= v ? 1 : 0), 0);
+  const ok = left === 0;
+  console.log(`  第${i + 1}关 ${g.level.name}: ${ok ? '✓ 通关' : '· 剩余猪 ' + left + '/' + total}  发射${shots}次 分数${g.score} ${'★'.repeat(stars)}${'☆'.repeat(3 - stars)}`);
+}
+
+/* ---------- 4.8 UI 初始化与交互流程 ---------- */
+console.log('— UI 初始化与交互 —');
+{
+  try {
+    vm.runInThisContext(fs.readFileSync(path.join(dir, 'ui.js'), 'utf8'), { filename: 'ui.js' });
+    UI.init();
+    console.log('  ✓ UI.init() 通过');
+    // 模拟：开始冒险 → 关卡 1
+    UI.startLevel(0);
+    UI.game.update(1 / 60);
+    console.log('  ✓ 开始冒险 → 第1关 渲染一帧通过');
+    // 模拟：关卡选择 / 说明 / 暂停 / 结算
+    UI.buildLevels(); UI.show('screen-levels'); UI.show('screen-howto');
+    UI.game.togglePause(); UI.game.togglePause();
+    UI.showResult({ win: true, stars: 2, score: 20000, remaining: 1, levelIndex: 0 });
+    console.log('  ✓ 关卡选择/说明/暂停/结算面板通过');
+    // 模拟：彩蛋关
+    UI.startEgg(0);
+    UI.game.update(1 / 60);
+    UI.game.egg.onUp(400, 300);
+    UI.game.update(1 / 60);
+    UI.showEggResult({ win: false, diff: 0, score: 1200 });
+    console.log('  ✓ 彩蛋关启动/点击/结算通过');
+  } catch (e) {
+    bad('UI 流程异常: ' + e.message + '\n' + (e.stack || '').split('\n').slice(1, 4).join('\n'));
+  }
+}
+
+/* ---------- 5. 彩蛋关 ---------- */
+console.log('— 彩蛋关（智能策略模拟 30 局） —');
+for (const diff of [0, 1]) {
+  let win = 0, lose = 0, stuck = 0;
+  for (let run = 0; run < 30; run++) {
+    const g = new Game(makeEl());
+    g.egg.start(diff);
+    let guard = 0;
+    while (g.egg.state === 'play' && guard++ < 3000) {
+      const inSlot = {};
+      for (const c of g.egg.slot) inSlot[c.type] = (inSlot[c.type] || 0) + 1;
+      const cands = g.egg.cards.filter(x => x.state === 'stack' && !x.locked);
+      if (!cands.length) break;
+      // 优先补齐槽中已有的类型（接近 3 的优先），其次高层的
+      cands.sort((a, b) => ((inSlot[b.type] || 0) - (inSlot[a.type] || 0)) || (b.layer - a.layer));
+      const c = cands[0];
+      g.egg.onUp(c.x, c.y);
+      for (let s = 0; s < 40; s++) g.egg.update(1 / 60);
+    }
+    if (g.egg.state === 'win') win++;
+    else if (g.egg.state === 'lose') lose++;
+    else stuck++;
+  }
+  console.log(`  ${diff === 0 ? '轻松' : '地狱'}局: 通关 ${win} / 失败 ${lose} / 未结束 ${stuck}`);
+  if (stuck > 0) bad(`难度${diff} 有 ${stuck} 局陷入僵局`);
+}
+
+console.log(fail ? `\n❌ 存在 ${fail} 个问题` : '\n✅ 全部检查通过');
+process.exit(fail ? 1 : 0);

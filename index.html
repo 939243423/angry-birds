@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#101a2b">
+<title>愤怒的小鸟 · 元素纪元 | Angry Birds Elemental</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+  <div id="stage">
+    <canvas id="game"></canvas>
+
+    <!-- ============ HUD ============ -->
+    <div id="hud" class="hidden">
+      <div class="hud-left">
+        <button class="btn-icon" id="btn-pause" title="暂停">❚❚</button>
+        <div class="hud-chip" id="chip-level">关卡 1</div>
+      </div>
+      <div class="hud-center">
+        <div class="hud-score" id="hud-score">0</div>
+        <div class="hud-wind" id="hud-wind"><span class="wind-arrow">➤</span><span class="wind-val">无风</span></div>
+      </div>
+      <div class="hud-right">
+        <button class="btn-icon" id="btn-restart" title="重玩本关">↻</button>
+        <div class="hud-chip" id="chip-birds">🐦 x3</div>
+      </div>
+    </div>
+
+    <!-- 关卡开场提示 -->
+    <div id="toast" class="hidden"></div>
+
+    <!-- 技能提示 -->
+    <div id="skill-hint" class="hidden"><span id="skill-hint-text"></span></div>
+
+    <!-- ============ 主菜单 ============ -->
+    <div class="screen" id="screen-menu">
+      <div class="menu-art">
+        <div class="title-wrap">
+          <h1 class="game-title">愤怒的小鸟</h1>
+          <div class="game-subtitle">元 素 纪 元</div>
+        </div>
+      </div>
+      <div class="menu-buttons">
+        <button class="btn btn-primary" id="btn-play">开始冒险</button>
+        <button class="btn" id="btn-levels">关卡选择</button>
+        <button class="btn btn-ghost" id="btn-egg">🥚 彩蛋关（通关第 3 关解锁）</button>
+        <button class="btn btn-ghost btn-small" id="btn-howto">玩法说明</button>
+        <button class="btn btn-ghost btn-small" id="btn-reset">清除存档</button>
+      </div>
+      <div class="menu-footer">拖动弹弓发射 · 飞行中点击/空格释放技能</div>
+    </div>
+
+    <!-- ============ 关卡选择 ============ -->
+    <div class="screen hidden" id="screen-levels">
+      <div class="panel">
+        <h2 class="panel-title">选择关卡</h2>
+        <div class="level-grid" id="level-grid"></div>
+        <div class="panel-foot">
+          <div class="total-stars">⭐ <span id="total-stars">0</span> / <span id="max-stars">24</span></div>
+          <button class="btn btn-small" id="btn-back-menu">返回</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 玩法说明 ============ -->
+    <div class="screen hidden" id="screen-howto">
+      <div class="panel panel-wide">
+        <h2 class="panel-title">玩法说明</h2>
+        <div class="howto-grid">
+          <div class="howto-card">
+            <div class="howto-ico">🎯</div>
+            <div><b>发射</b><br>按住小鸟向后拖动蓄力，松手发射。虚线为预测轨迹，灰点为上一发的真实轨迹。</div>
+          </div>
+          <div class="howto-card">
+            <div class="howto-ico">⚡</div>
+            <div><b>空中技能</b><br>飞行途中<b>点击画面</b>或按<b>空格</b>释放技能，每只鸟只能用一次。</div>
+          </div>
+          <div class="howto-card">
+            <div class="howto-ico">🌀</div>
+            <div><b>传送门</b><br>蓝橙成对的门，进入其一从另一门飞出，速度与朝向随门旋转。</div>
+          </div>
+          <div class="howto-card">
+            <div class="howto-ico">🎈</div>
+            <div><b>气球猪</b><br>被气球吊着的猪，打爆气球它会摔下来；也可直接命中本体。</div>
+          </div>
+          <div class="howto-card">
+            <div class="howto-ico">💨</div>
+            <div><b>气流与风</b><br>风扇区域会持续吹动飞行物；每关还有全局横风，注意风向箭头。</div>
+          </div>
+          <div class="howto-card">
+            <div class="howto-ico">💥</div>
+            <div><b>连锁反应</b><br>TNT 会引爆周围一切，木头怕火、冰块最脆、石头最硬。</div>
+          </div>
+        </div>
+        <div class="panel-foot">
+          <div class="bird-legend" id="bird-legend"></div>
+          <button class="btn btn-small" id="btn-back-menu2">返回</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 彩蛋关入口 ============ -->
+    <div class="screen hidden" id="screen-egg">
+      <div class="panel">
+        <h2 class="panel-title">🥚 彩蛋关 · 蛋了个蛋</h2>
+        <div class="egg-desc">
+          堆叠的蛋牌，点三张相同的进槽位即可消除。<br>
+          槽位只有 <b>7</b> 格，塞满就失败 —— 小心“羊了个羊”式的地狱难度！
+        </div>
+        <div class="egg-diff">
+          <div class="egg-card" id="btn-egg-easy">
+            <div class="egg-card-title">轻松局</div>
+            <div class="egg-card-sub">5 种图案 · 54 张 · 4 层</div>
+            <div class="egg-card-reward">奖励 🥇 金羽 x1</div>
+          </div>
+          <div class="egg-card hard" id="btn-egg-hard">
+            <div class="egg-card-title">地狱局</div>
+            <div class="egg-card-sub">8 种图案 · 102 张 · 6 层</div>
+            <div class="egg-card-reward">奖励 🥇 金羽 x2</div>
+          </div>
+        </div>
+        <div class="panel-foot">
+          <div class="total-stars">🥇 金羽 <span id="egg-feathers">0</span> / 3</div>
+          <button class="btn btn-small" id="btn-egg-back">返回</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 结算 ============ -->
+    <div class="screen hidden" id="screen-result">
+      <div class="panel result-panel">
+        <h2 class="panel-title" id="result-title">关卡完成！</h2>
+        <div class="stars-row" id="stars-row">
+          <div class="star-big" data-i="0">★</div>
+          <div class="star-big" data-i="1">★</div>
+          <div class="star-big" data-i="2">★</div>
+        </div>
+        <div class="score-row">
+          <span>本关得分</span>
+          <b id="result-score">0</b>
+        </div>
+        <div class="score-row small">
+          <span>历史最佳</span>
+          <b id="result-best">0</b>
+        </div>
+        <div class="result-buttons">
+          <button class="btn" id="btn-retry">重玩</button>
+          <button class="btn" id="btn-tolevels">关卡</button>
+          <button class="btn btn-primary" id="btn-next">下一关</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 暂停 ============ -->
+    <div class="screen hidden" id="screen-pause">
+      <div class="panel">
+        <h2 class="panel-title">已暂停</h2>
+        <div class="result-buttons">
+          <button class="btn" id="btn-resume">继续</button>
+          <button class="btn" id="btn-pause-restart">重玩</button>
+          <button class="btn" id="btn-pause-menu">主菜单</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 竖屏提示（仅移动端） -->
+    <div id="rotate-tip" class="hidden">
+      <div class="rotate-inner">
+        <div class="rotate-ico">📱</div>
+        <div>横屏游玩体验更佳</div>
+      </div>
+    </div>
+
+    <!-- 加载/静音 -->
+    <button class="btn-icon mute-btn hidden" id="btn-mute">🔊</button>
+  </div>
+</div>
+
+<script src="js/utils.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/particles.js"></script>
+<script src="js/physics.js"></script>
+<script src="js/entities.js"></script>
+<script src="js/levels.js"></script>
+<script src="js/render.js"></script>
+<script src="js/egggame.js"></script>
+<script src="js/game.js"></script>
+<script src="js/ui.js"></script>
+</body>
+</html>
