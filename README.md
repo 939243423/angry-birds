@@ -1,5 +1,7 @@
 # 愤怒的小鸟 · 网页版
 
+[![CI](https://github.com/939243423/angry-birds/actions/workflows/ci.yml/badge.svg)](https://github.com/939243423/angry-birds/actions/workflows/ci.yml)
+
 零依赖、纯原生 JavaScript 实现的高品质愤怒的小鸟网页游戏，支持桌面端与移动端 H5，内置彩蛋关「蛋了个蛋」。
 
 ## 启动方式
@@ -108,3 +110,36 @@ node tools/smoke.js
 - 完美通关（3 星）分数最高
 - 最高分存档于 localStorage，重启浏览器不丢失
 - 「清除存档」按钮在主菜单底部，可一键重置
+
+## 版本管理
+
+远端仓库：<https://github.com/939243423/angry-birds>
+
+```bash
+# 日常提交流程
+git add .
+git commit -m "feat: 描述本次改动"
+git push
+```
+
+### CI 自动校验
+
+每次 push / PR 到 `main` 会触发 GitHub Actions（`.github/workflows/ci.yml`）：
+
+1. 全部 JS 语法检查（`node --check`）
+2. 冒烟自检（`node tools/smoke.js`）
+3. 关键文件存在性与非空校验
+
+本地推送前建议先跑一遍 `node tools/smoke.js`，与 CI 保持一致。
+
+### 提交信息约定
+
+| 前缀 | 用途 |
+|------|------|
+| `feat:` | 新增玩法 / 功能 |
+| `fix:` | 修复 bug |
+| `perf:` | 性能优化 |
+| `refactor:` | 重构（不改变行为） |
+| `style:` | 样式 / 视觉调整 |
+| `docs:` | 文档 |
+| `chore:` | 构建 / 配置 / 依赖 |

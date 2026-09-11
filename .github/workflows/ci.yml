@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    name: 语法检查 + 冒烟自检
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: 语法检查（全部 JS）
+        run: |
+          set -e
+          for f in js/*.js tools/*.js; do
+            node --check "$f"
+            echo "OK  $f"
+          done
+
+      - name: 冒烟自检
+        run: node tools/smoke.js
+
+      - name: 关键文件完整性
+        run: |
+          set -e
+          for f in index.html css/style.css js/physics.js js/game.js js/egggame.js README.md; do
+            test -s "$f" || { echo "缺失或为空: $f"; exit 1; }
+          done
+          echo "全部关键文件存在且非空"
