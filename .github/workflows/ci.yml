@@ -39,3 +39,22 @@ jobs:
             test -s "$f" || { echo "缺失或为空: $f"; exit 1; }
           done
           echo "全部关键文件存在且非空"
+
+      # 防止 shell 脚本的可执行位丢失。
+      # 注意：Windows 文件系统没有权限位，一旦有人在 Windows 上重新 add，
+      # 极易把 100755 退回 100644，导致服务器上无法 ./deploy.sh
+      - name: 校验 Shell 脚本可执行位
+        run: |
+          fail=0
+          while IFS=$'\t' read -r meta file; do
+            [ -z "$file" ] && continue
+            mode="${meta%% *}"     # meta 形如 "100755 <sha> 0"
+            if [ "$mode" != "100755" ]; then
+              echo "::error file=$file::$file 在 git 中缺少可执行位（当前 $mode）"
+              echo "  修复命令：git update-index --chmod=+x $file"
+              fail=1
+            else
+              echo "OK   $file  ($mode)"
+            fi
+          done < <(git ls-files -s '*.sh')
+          exit $fail
