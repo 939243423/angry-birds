@@ -47,7 +47,7 @@
       <div class="menu-buttons">
         <button class="btn btn-primary" id="btn-play">开始冒险</button>
         <button class="btn" id="btn-levels">关卡选择</button>
-        <button class="btn btn-ghost btn-egg" id="btn-egg">🥚 彩蛋关（通关第 3 关解锁）</button>
+        <button class="btn btn-ghost btn-egg hidden" id="btn-egg">🥚 彩蛋关 · 蛋了个蛋</button>
         <div class="menu-minor">
           <button class="btn btn-ghost btn-small" id="btn-howto">玩法说明</button>
           <button class="btn btn-ghost btn-small" id="btn-reset">清除存档</button>
@@ -55,8 +55,8 @@
       </div>
       <div class="menu-stat">
         <span>⭐ <b id="menu-stars">0</b> / <span id="max-stars-menu">24</span></span>
-        <span class="stat-sep"></span>
-        <span>🥇 <b id="menu-feathers">0</b> / 3 金羽</span>
+        <span class="stat-sep" id="menu-stat-sep"></span>
+        <span id="menu-feathers-stat">🥇 <b id="menu-feathers">0</b> / 3 金羽</span>
       </div>
       <div class="menu-footer">拖动弹弓发射 · 飞行中点击 / 空格释放技能</div>
     </div>
@@ -134,6 +134,29 @@
           <div class="total-stars">🥇 金羽 <span id="egg-feathers">0</span> / 3</div>
           <button class="btn btn-small" id="btn-egg-back">返回</button>
         </div>
+      </div>
+    </div>
+
+    <!-- ============ 彩蛋关解锁庆祝（首次通关第 3 关触发） ============ -->
+    <div class="screen hidden" id="screen-unlock">
+      <div class="unlock-egg">
+        <div class="egg-shell"><span class="egg-shine"></span></div>
+        <div class="egg-burst"></div>
+      </div>
+      <h2 class="unlock-title">隐藏玩法解锁！</h2>
+      <div class="unlock-name">蛋 了 个 蛋</div>
+      <div class="unlock-desc">
+        恭喜通关前三关 —— 「羊了个羊」式堆叠三消关卡现已开启。<br>
+        7 格槽位，凑齐三张相同图案即可消除，槽满即败。
+      </div>
+      <div class="unlock-reward">
+        <span class="reward-item">🥇 通关可得 <b>1~2</b> 金羽</span>
+        <span class="reward-item">🎯 双难度 · 轻松 / 地狱</span>
+        <span class="reward-item">✨ 三种道具 · 移除 / 撤销 / 打乱</span>
+      </div>
+      <div class="unlock-buttons">
+        <button class="btn btn-ghost" id="btn-unlock-later">稍后再玩</button>
+        <button class="btn btn-primary" id="btn-unlock-go">立即挑战</button>
       </div>
     </div>
 

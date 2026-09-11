@@ -60,13 +60,18 @@ const UI = {
     // 彩蛋关
     $('btn-egg').onclick = () => {
       Sfx.init(); Sfx.click();
-      if (!Save.data.eggUnlocked) { this.toast('通关第 3 关后解锁彩蛋关'); return; }
       $('egg-feathers').textContent = Save.data.feathers;
       this.show('screen-egg');
     };
     $('btn-egg-easy').onclick = () => { Sfx.click(); this.startEgg(0); };
     $('btn-egg-hard').onclick = () => { Sfx.click(); this.startEgg(1); };
     $('btn-egg-back').onclick = () => { Sfx.click(); this.show('screen-menu'); };
+
+    // 彩蛋关解锁庆祝弹窗
+    $('btn-unlock-go').onclick = () => { Sfx.click(); this.startEgg(0); };
+    $('btn-unlock-later').onclick = () => {
+      Sfx.click(); this.show('screen-menu'); this.refreshMenu();
+    };
 
     // 静音
     const muteBtn = $('btn-mute');
@@ -94,7 +99,7 @@ const UI = {
 
   /* ---------------- 界面切换 ---------------- */
   show(id) {
-    ['screen-menu', 'screen-levels', 'screen-howto', 'screen-result', 'screen-pause', 'screen-egg'].forEach(s => {
+    ['screen-menu', 'screen-levels', 'screen-howto', 'screen-result', 'screen-pause', 'screen-egg', 'screen-unlock'].forEach(s => {
       $(s).classList.add('hidden');
     });
     $('hud').classList.toggle('hidden', !(id === null && this.game.mode === 'birds'));
@@ -183,11 +188,23 @@ const UI = {
     const eggBtn = $('btn-egg');
     if (eggBtn) {
       const unlocked = Save.data.eggUnlocked;
+      // 未解锁时入口完全不出现；解锁庆祝结束后才登场（带弹入动画）
+      eggBtn.classList.toggle('hidden', !unlocked);
       eggBtn.classList.toggle('btn-primary', unlocked);
-      eggBtn.textContent = unlocked
-        ? `🥚 彩蛋关 · 蛋了个蛋（${Save.data.feathers}/3）`
-        : '🥚 彩蛋关（通关第 3 关解锁）';
+      eggBtn.textContent = `🥚 彩蛋关 · 蛋了个蛋（${Save.data.feathers}/3）`;
+      if (unlocked && !this._eggRevealed) {
+        this._eggRevealed = true;
+        // 菜单此刻若被结算/庆祝面板遮着，动画会在下次显示菜单时才播
+        eggBtn.classList.add('reveal');
+        eggBtn.addEventListener('animationend', () => eggBtn.classList.remove('reveal'), { once: true });
+      }
     }
+    // 彩蛋关未解锁时，连金羽进度也一并隐藏，避免提前剧透
+    const feathersStat = $('menu-feathers-stat');
+    const statSep = $('menu-stat-sep');
+    if (feathersStat) feathersStat.classList.toggle('hidden', !Save.data.eggUnlocked);
+    if (statSep) statSep.classList.toggle('hidden', !Save.data.eggUnlocked);
+
     set('total-stars', Save.totalStars);
     set('max-stars', LEVELS.length * 3);
     set('menu-stars', Save.totalStars);
@@ -220,10 +237,20 @@ const UI = {
     }
     if (this.game.justUnlockedEgg) {
       this.game.justUnlockedEgg = false;
-      setTimeout(() => this.toast('🥚 彩蛋关「蛋了个蛋」已解锁！回主菜单查看', 4000), 1400);
+      // 等结算面板的星级动画播完，再弹出解锁庆祝
+      setTimeout(() => this.showUnlock(), 1750);
     }
     this.buildLevels();
     this.refreshMenu();
+  },
+
+  /* ---------------- 彩蛋关解锁庆祝 ---------------- */
+  showUnlock() {
+    if (!Save.data.eggUnlocked) return;
+    this.show('screen-unlock');
+    Sfx.win();
+    // 光爆动画播两轮后再补一次星音，强化"奖励到手"的听感
+    setTimeout(() => { if (!$('screen-unlock').classList.contains('hidden')) Sfx.star(2); }, 900);
   },
 
   showEggResult(res) {

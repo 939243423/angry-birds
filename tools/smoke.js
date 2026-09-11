@@ -252,6 +252,20 @@ console.log('— UI 初始化与交互 —');
     UI.game.update(1 / 60);
     UI.showEggResult({ win: false, diff: 0, score: 1200 });
     console.log('  ✓ 彩蛋关启动/点击/结算通过');
+
+    // 彩蛋关入口显隐 + 解锁庆祝（通关第 3 关后才会出现）
+    const eggEl = document.getElementById('btn-egg');
+    Save.data.eggUnlocked = false;
+    UI.refreshMenu();
+    const hiddenBefore = eggEl.classList.contains('hidden');
+    Save.data.eggUnlocked = true;
+    UI.game.justUnlockedEgg = true;
+    UI.refreshMenu();
+    const shownAfter = !eggEl.classList.contains('hidden');
+    UI.showUnlock();
+    console.log(`  ✓ 彩蛋入口 解锁前隐藏=${hiddenBefore} 解锁后显示=${shownAfter} 庆祝弹窗通过`);
+    if (!hiddenBefore) bad('未解锁时彩蛋关入口不应出现');
+    if (!shownAfter) bad('解锁后彩蛋关入口未显示');
   } catch (e) {
     bad('UI 流程异常: ' + e.message + '\n' + (e.stack || '').split('\n').slice(1, 4).join('\n'));
   }

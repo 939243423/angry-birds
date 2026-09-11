@@ -592,6 +592,138 @@ html, body {
 }
 .egg-card.hard .egg-card-reward { color:#7d1710; }
 
+/* ============ 彩蛋关解锁庆祝 ============ */
+#screen-unlock {
+  background:
+    radial-gradient(ellipse 70% 60% at 50% 42%, rgba(72,40,110,.62), transparent 68%),
+    radial-gradient(ellipse 90% 70% at 50% 100%, rgba(20,10,40,.85), transparent 70%),
+    rgba(5,7,16,.86);
+  backdrop-filter:blur(11px) saturate(1.15);
+  gap:clamp(6px,1.2vh,16px);
+  overflow:hidden;
+}
+
+/* ---- 大蛋：弹入 + 持续摇晃 ---- */
+.unlock-egg {
+  position:relative;
+  width:clamp(88px,16.5vh,186px);
+  height:clamp(110px,20.5vh,232px);
+  margin-bottom:clamp(4px,.8vh,12px);
+  animation:
+    eggDrop .78s var(--ease-pop) both,
+    eggWobble 2.8s ease-in-out .78s infinite;
+}
+.egg-shell {
+  position:absolute; inset:0;
+  border-radius:50% 50% 46% 46% / 62% 62% 40% 40%;
+  background:radial-gradient(ellipse at 34% 26%, #fffdf6, #ffeab8 36%, #f7cf7e 66%, #dda63f 100%);
+  box-shadow:
+    0 16px 38px rgba(0,0,0,.55),
+    inset -10px -14px 26px rgba(186,128,46,.42),
+    inset 8px 10px 20px rgba(255,255,255,.78),
+    0 0 52px rgba(255,196,90,.6);
+  overflow:hidden;
+}
+/* 蛋壳斑点 */
+.egg-shell::after {
+  content:''; position:absolute; inset:0;
+  background-image:
+    radial-gradient(circle at 30% 63%, rgba(208,152,70,.55) 0 8%, transparent 9%),
+    radial-gradient(circle at 67% 41%, rgba(208,152,70,.45) 0 6%, transparent 7%),
+    radial-gradient(circle at 51% 80%, rgba(208,152,70,.4) 0 5%, transparent 6%),
+    radial-gradient(circle at 74% 68%, rgba(208,152,70,.35) 0 4%, transparent 5%);
+}
+.egg-shine {
+  position:absolute; left:21%; top:13%; width:27%; height:22%;
+  border-radius:50%;
+  background:radial-gradient(circle, rgba(255,255,255,.96), transparent 72%);
+  filter:blur(1px);
+}
+@keyframes eggDrop {
+  0%   { opacity:0; transform:translateY(-76px) scale(.42) rotate(-17deg); }
+  68%  { opacity:1; transform:translateY(6px) scale(1.07) rotate(4deg); }
+  100% { opacity:1; transform:none; }
+}
+@keyframes eggWobble {
+  0%,100% { transform:rotate(-3.6deg); }
+  50%     { transform:rotate(3.6deg); }
+}
+
+/* ---- 蛋后方的光爆 ---- */
+.egg-burst {
+  position:absolute; left:50%; top:46%;
+  width:clamp(180px,34vh,380px); height:clamp(180px,34vh,380px);
+  transform:translate(-50%,-50%);
+  border-radius:50%;
+  background:radial-gradient(circle, rgba(255,240,190,.95), rgba(255,190,80,.4) 40%, transparent 68%);
+  pointer-events:none;
+  animation:eggBurst 1.7s ease-out .6s 2;
+}
+@keyframes eggBurst {
+  0%   { opacity:0; transform:translate(-50%,-50%) scale(.3); }
+  30%  { opacity:.92; }
+  100% { opacity:0; transform:translate(-50%,-50%) scale(1.3); }
+}
+
+/* ---- 文案逐级升起 ---- */
+.unlock-title {
+  font-size:clamp(20px,3.6vh,46px); font-weight:900;
+  color:#fff6dc; letter-spacing:.05em;
+  -webkit-text-stroke:clamp(2px,.32vh,4.5px) #7a2f08;
+  paint-order:stroke fill;
+  text-shadow:0 4px 0 #8a3410, 0 10px 30px rgba(0,0,0,.7), 0 0 54px rgba(255,190,80,.6);
+  animation:unlockRise .62s var(--ease-pop) .58s backwards;
+}
+.unlock-name {
+  font-size:clamp(25px,4.8vh,62px); font-weight:900;
+  color:#ffd76a; letter-spacing:.12em; text-indent:.12em;
+  text-shadow:0 4px 0 #a8500f, 0 12px 32px rgba(0,0,0,.68), 0 0 64px rgba(255,190,80,.72);
+  animation:unlockRise .62s var(--ease-pop) .7s backwards;
+}
+.unlock-desc {
+  max-width:min(600px,86vw); text-align:center;
+  font-size:clamp(10.5px,1.68vh,19px); line-height:1.85;
+  color:rgba(255,255,255,.88);
+  text-shadow:0 2px 9px rgba(0,0,0,.72);
+  animation:unlockRise .62s var(--ease-pop) .82s backwards;
+}
+@keyframes unlockRise {
+  from { opacity:0; transform:translateY(20px); }
+  to   { opacity:1; transform:none; }
+}
+
+.unlock-reward {
+  display:flex; flex-wrap:wrap; justify-content:center;
+  gap:clamp(6px,1.2vh,16px);
+  animation:unlockRise .62s var(--ease-pop) .94s backwards;
+}
+.reward-item {
+  font-size:clamp(9.5px,1.48vh,17px); font-weight:800;
+  color:#ffe9b8;
+  background:rgba(255,220,150,.13);
+  border:1.5px solid rgba(255,214,140,.44);
+  padding:.42em 1em; border-radius:var(--r-pill);
+  backdrop-filter:blur(4px);
+  box-shadow:inset 0 1px 0 rgba(255,235,190,.22);
+  white-space:nowrap;
+}
+.reward-item b { color:#ffd76a; }
+
+.unlock-buttons {
+  display:flex; gap:clamp(8px,1.3vh,16px);
+  margin-top:clamp(4px,.8vh,12px);
+  animation:unlockRise .62s var(--ease-pop) 1.06s backwards;
+}
+.unlock-buttons .btn { min-width:clamp(112px,16vh,184px); }
+
+/* ---- 菜单里彩蛋入口的登场动画 ---- */
+@keyframes eggReveal {
+  0%   { opacity:0; transform:translateY(16px) scale(.8); }
+  62%  { opacity:1; transform:translateY(-4px) scale(1.06); }
+  100% { opacity:1; transform:none; }
+}
+.btn-egg.reveal { animation:eggReveal .68s var(--ease-pop); }
+
 /* ============ 静音按钮 ============ */
 .mute-btn {
   position:absolute; right:1.4%; bottom:3.2%; z-index:25;
