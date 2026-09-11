@@ -13,9 +13,20 @@ function makeCtx() {
     }, set(t, p, v) { t[p] = v; return true; }
   });
 }
+function makeStyle() {
+  // 任意属性赋值都允许（el.style.top = 'x'），并补上 setProperty / removeProperty
+  // —— 主菜单 syncMenuScene() 会把 css 变量写到 #stage.style，冒烟测试要走通。
+  return new Proxy({}, {
+    get(t, p) {
+      if (p === 'setProperty' || p === 'removeProperty' || p === 'getPropertyValue') return () => '';
+      return t[p];
+    },
+    set(t, p, v) { t[p] = v; return true; }
+  });
+}
 function makeEl() {
   return {
-    width: 1600, height: 900, style: {}, textContent: '', title: '',
+    width: 1600, height: 900, style: makeStyle(), textContent: '', title: '',
     dataset: {}, _attrs: {}, _html: '', _children: [],
     get innerHTML() { return this._html; },
     set innerHTML(v) { this._html = String(v); this._children.length = 0; },
@@ -46,10 +57,13 @@ global.document = {
     }
     return [];
   },
-  documentElement: { style: { setProperty() { } }, classList: { add() { }, remove() { }, toggle() { } } },
+  documentElement: { style: makeStyle(), classList: { add() { }, remove() { }, toggle() { } } },
   body: { classList: { add() { }, remove() { }, toggle() { } } }
 };
-global.window = { addEventListener() { }, devicePixelRatio: 1, innerWidth: 1600, innerHeight: 900 };
+global.window = {
+  addEventListener() { }, devicePixelRatio: 1, innerWidth: 1600, innerHeight: 900,
+  matchMedia: () => ({ matches: false, addEventListener() { }, addListener() { } })
+};
 global.navigator = { maxTouchPoints: 0 };
 global.performance = { now: () => Date.now() };
 global.requestAnimationFrame = () => 0;

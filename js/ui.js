@@ -13,9 +13,8 @@ const UI = {
     this.game = new Game($('game'));
     const g = this.game;
 
-    // 菜单背景：预载第一关场景
-    g.loadLevel(0);
-    g.mode = 'menu';
+    // 菜单背景：当前进度所在关卡的场景（「开始冒险」会进入的那一关）
+    this.loadMenuScene();
 
     this.buildLevels();
     this.buildLegend();
@@ -203,6 +202,66 @@ const UI = {
     });
     $('hud').classList.toggle('hidden', !(id === null && this.game.mode === 'birds'));
     if (id) $(id).classList.remove('hidden');
+    if (id === 'screen-menu') {
+      this.loadMenuScene();     // 背景跟着进度走（「开始冒险」将进入的那一关）
+      this.syncMenuScene();     // 竖屏：舞台铺满视口 + 场景窗摆进空档
+    } else {
+      this.syncMenuScene();     // 非菜单：自动摘掉 .menu-scene 并清掉 --scene-* 变量
+    }
+  },
+
+  /** 主菜单背景 = 当前进度关卡的场景。
+   *  旧实现写死 `loadLevel(0)`，玩家打到第 8 关时菜单封面仍是第 1 关，与进度脱节。 */
+  loadMenuScene() {
+    const g = this.game;
+    const idx = clamp(Math.min(Save.data.unlocked, LEVELS.length) - 1, 0, LEVELS.length - 1);
+    // 已经停在这关的场景上就跳过：refreshMenu 等路径会频繁回到菜单，重建会闪一下
+    if (g.mode === 'menu' && g.levelIndex === idx) return;
+    g.loadLevel(idx);
+    g.mode = 'menu';
+  },
+
+  /** 竖屏主菜单：把 16:9 场景窗摆进「标题底 ↔ 按钮顶」的空档里居中。
+   *  这件事纯 CSS 做不到 —— 空档高度取决于标题字号、按钮数量（彩蛋关解锁后会多一行），
+   *  硬编码百分比换台机器就压住按钮（旧版正是如此）。所以这里实测 rect 后写回
+   *  --scene-cy / --scene-hh / --scene-w，CSS 只负责消费这三个变量。 */
+  syncMenuScene() {
+    const stage = $('stage');
+    const menu = $('screen-menu');
+    if (!stage) return;
+    // 竖屏菜单时舞台才需要铺满视口；其余情况（含桌面 / 横屏）保持 16:9 居中
+    const inMenu = !!menu && !menu.classList.contains('hidden');
+    const portrait = !!(window.matchMedia && window.matchMedia('(orientation: portrait)').matches);
+    stage.classList.toggle('menu-scene', inMenu && portrait);
+    if (!inMenu || !portrait) {
+      stage.style.removeProperty('--scene-cy');
+      stage.style.removeProperty('--scene-hh');
+      stage.style.removeProperty('--scene-w');
+      return;
+    }
+    const g = this.game;
+    const art = menu.querySelector('.menu-art');
+    const btns = menu.querySelector('.menu-buttons');
+    if (!art || !btns) return;
+    const a = art.getBoundingClientRect();
+    const b = btns.getBoundingClientRect();
+    const top = a.bottom + 8;
+    const bottom = b.top - 10;
+    if (bottom - top < 40) {   // 极小屏：空间不够就交回 CSS 默认位置，别硬塞
+      stage.style.removeProperty('--scene-cy');
+      stage.style.removeProperty('--scene-hh');
+      stage.style.removeProperty('--scene-w');
+      g.renderer.resize();
+      return;
+    }
+    const vw = window.innerWidth;
+    // 场景窗尽量大，但不越出屏宽（16:9 完整可见，不做裁切）
+    const h = Math.min(bottom - top, vw * 9 / 16);
+    const w = h * 16 / 9;
+    stage.style.setProperty('--scene-cy', ((top + bottom) / 2).toFixed(1) + 'px');
+    stage.style.setProperty('--scene-hh', (h / 2).toFixed(1) + 'px');
+    stage.style.setProperty('--scene-w', w.toFixed(1) + 'px');
+    g.renderer.resize();       // canvas 的 CSS 尺寸变了 → 重算位图分辨率
   },
 
   /* 通用确认弹窗：替代原生 confirm（系统弹窗样式无法控制，观感割裂） */
@@ -685,7 +744,8 @@ const UI = {
       }
       document.body && document.body.classList.toggle('portrait', portrait);
     };
-    const onResize = () => { setVH(); checkOrient(); this.game.renderer.resize(); };
+    // --vh 先落定再同步菜单场景：场景窗位置是按视口实测的，顺序反了会算在旧高度上
+    const onResize = () => { setVH(); checkOrient(); this.syncMenuScene(); this.game.renderer.resize(); };
     window.addEventListener('resize', onResize);
     window.addEventListener('orientationchange', () => setTimeout(onResize, 250));
     setVH(); checkOrient();

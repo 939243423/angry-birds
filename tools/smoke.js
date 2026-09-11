@@ -3,6 +3,17 @@
 const fs = require('fs'), path = require('path'), vm = require('vm');
 
 const grad = { addColorStop() { } };
+function makeStyle() {
+  // 任意属性赋值都允许（el.style.top = 'x'），并补上 setProperty / removeProperty
+  // —— 主菜单 syncMenuScene() 会把 css 变量写到 #stage.style，冒烟测试要走通。
+  return new Proxy({}, {
+    get(t, p) {
+      if (p === 'setProperty' || p === 'removeProperty' || p === 'getPropertyValue') return () => '';
+      return t[p];
+    },
+    set(t, p, v) { t[p] = v; return true; }
+  });
+}
 function makeCtx() {
   return new Proxy({}, {
     get(t, p) {
@@ -16,7 +27,7 @@ function makeCtx() {
 }
 function makeEl() {
   return {
-    width: 1600, height: 900, style: {}, textContent: '', title: '',
+    width: 1600, height: 900, style: makeStyle(), textContent: '', title: '',
     dataset: {}, _attrs: {}, _html: '', _children: [],
     get innerHTML() { return this._html; },
     set innerHTML(v) { this._html = String(v); this._children.length = 0; },
@@ -43,10 +54,13 @@ global.document = {
     if (m) { const e = els[m[1]] || (els[m[1]] = makeEl()); return [e]; }
     return [];
   },
-  documentElement: { style: { setProperty() { } }, classList: { add() { }, remove() { }, toggle() { } } },
+  documentElement: { style: makeStyle(), classList: { add() { }, remove() { }, toggle() { } } },
   body: { classList: { add() { }, remove() { }, toggle() { } } }
 };
-global.window = { addEventListener() { }, devicePixelRatio: 1, innerWidth: 1600, innerHeight: 900 };
+global.window = {
+  addEventListener() { }, devicePixelRatio: 1, innerWidth: 1600, innerHeight: 900,
+  matchMedia: () => ({ matches: false, addEventListener() { }, addListener() { } })
+};
 global.navigator = { maxTouchPoints: 0 };
 global.performance = { now: () => Date.now() };
 global.requestAnimationFrame = () => 0;
@@ -741,6 +755,30 @@ console.log('— UI 初始化与交互 —');
     const losingOk = UI.game.phase === 'losing';
     console.log(`  ${losingOk ? '✓' : '✗'} 关卡内放弃救援走判负：phase=${UI.game.phase}`);
     if (!losingOk) bad('关卡内放弃救援没有走判负流程');
+
+    // 主菜单背景必须跟随当前进度关卡（旧实现写死 loadLevel(0)，
+    // 玩家打到第 8 关时封面还停在第 1 关，与进度脱节）。
+    Save.reset();
+    Save.data.unlocked = 7; Save.save();
+    UI.show('screen-menu');
+    const menuLvl = UI.game.levelIndex;
+    const menuName = UI.game.level && UI.game.level.name;
+    const menuMode = UI.game.mode;
+    const followOk = menuLvl === 6 && menuMode === 'menu';
+    console.log(`  ${followOk ? '✓' : '✗'} 菜单背景跟随进度：unlocked=7 → 关卡#${menuLvl}「${menuName}」mode=${menuMode}`);
+    if (!followOk) bad('主菜单背景没有跟随「开始冒险」将要进入的关卡');
+
+    // 竖屏菜单：舞台加 .menu-scene，场景窗位置写入 --scene-cy/--scene-hh/--scene-w
+    // （mock 的 matchMedia 返回 false，即非竖屏，应清空变量且不加类）
+    const stageEl = document.getElementById('stage');
+    const portraitOk = !stageEl.classList.contains('menu-scene');
+    UI.show('screen-levels');
+    const notMenuOk = !stageEl.classList.contains('menu-scene');
+    console.log(`  ${notMenuOk && portraitOk ? '✓' : '✗'} 非竖屏/非菜单不挂 .menu-scene（离开菜单即摘掉）`);
+    if (!notMenuOk) bad('.menu-scene 未在离开主菜单时摘掉，游戏内布局会被撑成满屏');
+    if (!portraitOk) bad('非竖屏下不应给舞台挂 .menu-scene');
+    Save.reset();
+    UI.show('screen-menu');
   } catch (e) {
     bad('UI 流程异常: ' + e.message + '\n' + (e.stack || '').split('\n').slice(1, 4).join('\n'));
   }

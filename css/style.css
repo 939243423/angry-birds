@@ -1001,27 +1001,46 @@ html, body {
   .hud-chip { font-size:clamp(8px,1.05vh,13px); padding:.26em .7em; border-width:1.5px; }
   .hud-wind { font-size:clamp(7px,.95vh,12px); padding:.16em .6em; }
 
-  /* ---- 主菜单：内容整体居中，消除标题与按钮之间的大片空洞 ----
-     背景的暗角按"画面窗"的上下边界淡入，让画面与四周深色自然衔接 */
+  /* ---- 主菜单：场景窗完整露出，按钮组沉底，两者不再叠在一起 ----
+     旧版把按钮组直接压在下半屏，正好盖住 16:9 场景窗的草地与猪
+     —— 用户反馈"菜单下背景被大量挡住"。新版三点：
+       ① 场景窗居中在「标题底 ↔ 按钮顶」的空档里，位置由 ui.js 的
+          syncMenuScene() 实测 rect 后写入 --scene-cy / --scene-w，
+          屏幕尺寸再怎么变都不会重叠（旧版硬编码 50% 一旦换机就压住）；
+       ② 背景暗角用同一组 CSS 变量淡入，与窗口边界永远对齐；
+       ③ 按钮组照旧贴底，留在拇指区好按。 */
+  #stage.menu-scene {
+    /* 竖屏菜单：舞台临时撑满视口，场景窗才能越出 16:9 窄条上下摆放 */
+    width:100vw;
+    height:calc(var(--vh, 1vh) * 100);
+  }
+  #stage.menu-scene #game {
+    top:var(--scene-cy, 42vh);
+    left:50%; right:auto; bottom:auto;
+    width:var(--scene-w, 100vw);
+    height:auto;
+    aspect-ratio:16 / 9;
+    transform:translate(-50%,-50%);
+    border-radius:clamp(10px,2.2vh,20px);
+    box-shadow:0 16px 46px rgba(0,0,0,.62), 0 0 0 2px rgba(255,255,255,.14);
+  }
   #screen-menu {
     background:
       linear-gradient(180deg,
         #0b1220 0%,
-        #0b1220 calc(50% - 100vw * 9 / 32 - 70px),
-        rgba(11,18,32,.62) calc(50% - 100vw * 9 / 32 - 18px),
-        rgba(11,18,32,.34) calc(50% - 100vw * 9 / 32 + 16px),
-        rgba(11,18,32,.24) 50%,
-        rgba(11,18,32,.34) calc(50% + 100vw * 9 / 32 - 16px),
-        rgba(11,18,32,.62) calc(50% + 100vw * 9 / 32 + 18px),
-        #0b1220 calc(50% + 100vw * 9 / 32 + 70px),
+        #0b1220 calc(var(--scene-cy, 42vh) - var(--scene-hh, 31.5vw) - 62px),
+        rgba(11,18,32,.58) calc(var(--scene-cy, 42vh) - var(--scene-hh, 31.5vw) - 16px),
+        rgba(11,18,32,.26) calc(var(--scene-cy, 42vh) - var(--scene-hh, 31.5vw) + 14px),
+        rgba(11,18,32,.15) var(--scene-cy, 42vh),
+        rgba(11,18,32,.26) calc(var(--scene-cy, 42vh) + var(--scene-hh, 31.5vw) - 14px),
+        rgba(11,18,32,.58) calc(var(--scene-cy, 42vh) + var(--scene-hh, 31.5vw) + 16px),
+        #0b1220 calc(var(--scene-cy, 42vh) + var(--scene-hh, 31.5vw) + 62px),
         #0b1220 100%);
     backdrop-filter:none;
-    /* 竖向构图：标题落在"场景窗"上半部，按钮组沉到底部拇指区，
-       中间让出场景窗下半部（草地/弹弓可见），四点式分布不再上重下轻 */
+    /* 标题贴顶、按钮组贴底，中间整段空档留给场景窗 */
     justify-content:flex-start;
-    gap:clamp(9px,1.8vh,22px);
-    /* -66px：把标题整体抬到画面窗上边界之上，避免窗边硬线从标题中间穿过 */
-    padding:calc(var(--vh, 1vh) * 50 - 100vw * 9 / 32 - 66px) 0 clamp(14px,2.4vh,30px);
+    gap:clamp(6px,1.1vh,14px);
+    padding:clamp(62px,12vh,118px) 0 max(clamp(14px,2.4vh,30px), env(safe-area-inset-bottom));
   }
   #screen-menu .menu-art { flex:0 0 auto; }
   #screen-menu .menu-buttons { margin-top:auto; }
