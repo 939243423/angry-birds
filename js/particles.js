@@ -216,6 +216,13 @@ class Fx {
       }));
     }
   }
+  /** 冲击环：一圈快速扩散的描边圆，用于技能释放的"瞬间感"。 */
+  ring(x, y, radius = 60, color = 'rgba(255,240,190,.95)', life = 0.4) {
+    this.p.add(new Particle({
+      x, y, vx: 0, vy: 0, life, size: radius * 0.45, type: 'ring',
+      color, grav: 0, drag: 0
+    }));
+  }
   explosion(x, y, radius = 130) {
     this.addShake(16); this.addFlash(0.55); this.freeze(0.05);
     for (let i = 0; i < 26; i++) {

@@ -228,6 +228,38 @@ console.log('— 技能与连锁 —');
   }
   console.log('  技能验证:', JSON.stringify(skills, null, 0));
 
+  /* 技能可感知性：释放时必须 (1) 播报技能名 (2) 全屏轻闪 (3) 产生粒子
+     —— 这三条是"九只鸟手感趋同"的防回归护栏 */
+  {
+    let announceOk = 0, flashOk = 0, fxOk = 0;
+    const names = [];
+    for (const t of Object.keys(BIRD_TYPES)) {
+      const g = new Game(makeEl());
+      g.loadLevel(2);
+      const b = new Bird(t, SLING.x, SLING.y - 14);
+      g.birds.push(b); g.currentBird = b;
+      g.launch(b, 900, -520);
+      for (let s = 0; s < 36; s++) { g.stepPhysics(1 / 120); g.updateGameplay(1 / 120, 1 / 120); }
+      const fx0 = g.fx.p.list.length;
+      g.fx.flash = 0;
+      // 记录播报文本
+      const seen = [];
+      const origScoreText = g.fx.scoreText.bind(g.fx);
+      g.fx.scoreText = (x, y, text, ...rest) => { seen.push(text); return origScoreText(x, y, text, ...rest); };
+      b.useSkill(g);
+      g.fx.scoreText = origScoreText;
+      if (seen.includes(BIRD_TYPES[t].skill)) { announceOk++; names.push(t); }
+      if (g.fx.flash > 0) flashOk++;
+      if (g.fx.p.list.length > fx0) fxOk++;
+    }
+    if (announceOk !== 9) bad(`技能播报缺失：仅 ${announceOk}/9 只鸟播报了技能名（${names.join(',')}）`);
+    else console.log(`  ✓ 9 只鸟释放技能均播报技能名`);
+    if (flashOk !== 9) bad(`技能闪屏缺失：仅 ${flashOk}/9 只鸟触发全屏轻闪`);
+    else console.log(`  ✓ 9 只鸟释放技能均触发全屏轻闪`);
+    if (fxOk !== 9) bad(`技能粒子缺失：仅 ${fxOk}/9 只鸟产生粒子特效`);
+    else console.log(`  ✓ 9 只鸟释放技能均产生粒子特效`);
+  }
+
   const g = new Game(makeEl());
   g.loadLevel(2);
   g.explodeAt(1200, 640, 200, 600);

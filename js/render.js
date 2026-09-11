@@ -427,10 +427,25 @@ class Renderer {
       ctx.restore();
     }
     if (b.fuse > 0) {
+      // 定时炸弹倒计时：红色脉冲光晕 + 外圈收缩弧（剩余时间越少弧越短、闪得越快）
       ctx.save();
-      ctx.globalAlpha = 0.5 + 0.5 * Math.sin(t * 40);
-      ctx.fillStyle = '#ff3b1f';
-      ctx.beginPath(); ctx.arc(0, 0, r * 1.5, 0, TAU); ctx.fill();
+      const urgency = clamp(1 - b.fuse / 0.5, 0, 1);
+      const pulse = 0.5 + 0.5 * Math.sin(t * (26 + urgency * 30));
+      ctx.globalCompositeOperation = 'lighter';
+      const fg = ctx.createRadialGradient(0, 0, r * 0.6, 0, 0, r * (1.7 + pulse * 0.55));
+      fg.addColorStop(0, `rgba(255,70,30,${0.42 + pulse * 0.34})`);
+      fg.addColorStop(0.6, `rgba(255,150,40,${0.2 + pulse * 0.2})`);
+      fg.addColorStop(1, 'rgba(255,60,0,0)');
+      ctx.fillStyle = fg;
+      ctx.beginPath(); ctx.arc(0, 0, r * (1.7 + pulse * 0.55), 0, TAU); ctx.fill();
+      ctx.globalCompositeOperation = 'source-over';
+      // 收缩弧：从满圆缩到零，直观读秒
+      ctx.strokeStyle = `rgba(255,${Math.round(80 + 140 * pulse)},60,${0.85})`;
+      ctx.lineWidth = r * 0.18;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 1.45, -Math.PI / 2, -Math.PI / 2 + TAU * (1 - urgency));
+      ctx.stroke();
       ctx.restore();
     }
   }

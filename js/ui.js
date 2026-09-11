@@ -11,6 +11,7 @@ const UI = {
   init() {
     Save.load();
     this.game = new Game($('game'));
+    window.__game = this.game;
     const g = this.game;
 
     // 菜单背景：当前进度所在关卡的场景（「开始冒险」会进入的那一关）
@@ -759,3 +760,7 @@ const UI = {
 };
 
 window.addEventListener('DOMContentLoaded', () => UI.init());
+
+// 调试 / 自动化钩子：截图与技能实证工具依赖它（不影响正常游戏）
+window.__game = null;
+window.__ui = UI;

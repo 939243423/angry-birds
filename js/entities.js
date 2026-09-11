@@ -99,13 +99,18 @@ class Bird {
     this.skillUsed = true;
     const k = this.def.skillKey;
     Sfx.skill(k === 'blast' ? 'dash' : k);
+    // 技能播报：让玩家明确知道"这只鸟放了什么招"，避免九只鸟手感趋同
+    game.announceSkill(this);
     if (k === 'dash') {
       const s = Math.max(len(this.vx, this.vy), 320);
       const a = Math.atan2(this.vy, this.vx);
       this.vx = Math.cos(a) * s * 2.35; this.vy = Math.sin(a) * s * 2.35;
       this.power = 2.0;
-      game.fx.burst(this.x, this.y, { count: 18, color: '#ffe066', type: 'spark', spMax: 520, grav: 200 });
-      game.fx.addShake(6);
+      // 超音冲刺：黄色火花 + 白热冲击环 + 速度线，务必一眼看出"变快了"
+      game.fx.burst(this.x, this.y, { count: 26, color: '#ffe066', type: 'spark', spMax: 620, grav: 200 });
+      game.fx.burst(this.x, this.y, { count: 10, color: '#ffffff', type: 'dot', spMax: 380, grav: 0 });
+      game.fx.ring(this.x, this.y, 46, '#fff3b0');
+      game.fx.addShake(8);
     } else if (k === 'blast') {
       const s = Math.max(len(this.vx, this.vy), 340);
       const a = Math.atan2(this.vy, this.vx);
@@ -115,6 +120,10 @@ class Bird {
       game.fx.addShake(5);
     } else if (k === 'bomb') {
       this.fuse = 0.5;
+      // 定时炸弹：点火火花 + 浓烟，配合鸟身的红色脉冲，明确"引信已点燃"
+      game.fx.burst(this.x, this.y, { count: 22, color: '#ffd24a', type: 'spark', spMax: 300, grav: 260 });
+      game.fx.burst(this.x, this.y, { count: 12, color: 'rgba(90,90,100,.85)', type: 'smoke', spMax: 130, grav: -40 });
+      game.fx.addShake(3);
     } else if (k === 'split') {
       const s = len(this.vx, this.vy) || 600;
       const a = Math.atan2(this.vy, this.vx);

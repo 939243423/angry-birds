@@ -974,4 +974,15 @@ class Game {
   emitState() { if (this.onState) this.onState(this); }
   showSkillHint(text) { if (this.onHint) this.onHint(text); }
   hideSkillHint() { if (this.onHint) this.onHint(null); }
+
+  /**
+   * 技能播报：在鸟上方打出「技能名」飘字 + 一次全屏轻闪。
+   * 九只鸟的被动效果（加速 / 分裂 / 引信…）在手感上容易被忽略，
+   * 播报把"我刚放了什么招"明确写给玩家看。
+   */
+  announceSkill(bird) {
+    const d = bird.def;
+    this.fx.scoreText(bird.x, bird.y - bird.r - 26, d.skill, '#fff6cf', 30);
+    this.fx.addFlash(0.12);
+  }
 }
