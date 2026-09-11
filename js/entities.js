@@ -32,6 +32,18 @@ const BIRD_TYPES = {
     r: 24, mass: 1.25, power: 0.9, restitution: 0.16,
     body: '#3b3b45', body2: '#191920', belly: '#ffb54a',
     hint: '空中点击 → 引爆炸弹，大范围摧毁'
+  },
+  green: {
+    name: '回旋绿', skill: '回旋折返', skillKey: 'boomerang',
+    r: 21, mass: 0.95, power: 1.0, restitution: 0.24,
+    body: '#4fc94f', body2: '#2b8f2b', belly: '#e6ffd6',
+    hint: '空中点击 → 折返飞行，回打身后的目标'
+  },
+  violet: {
+    name: '引力紫', skill: '引力奇点', skillKey: 'gravity',
+    r: 22, mass: 1.1, power: 0.95, restitution: 0.2,
+    body: '#9b5cf0', body2: '#5f2ea8', belly: '#ecdcff',
+    hint: '空中点击 → 制造引力场，把周围全吸过来'
   }
 };
 
@@ -99,6 +111,20 @@ class Bird {
       const a0 = a;
       this.vx = Math.cos(a0) * s * 1.06; this.vy = Math.sin(a0) * s * 1.06;
       game.fx.burst(this.x, this.y, { count: 14, color: '#9fe0ff', type: 'dot', spMax: 300 });
+    } else if (k === 'boomerang') {
+      // 回旋绿：原路折返，并向上抬一点以免立刻砸地
+      const s = Math.max(len(this.vx, this.vy), 460);
+      const a = Math.atan2(this.vy, this.vx);
+      this.vx = -Math.cos(a) * s * 1.3;
+      this.vy = -Math.abs(Math.sin(a)) * s * 0.45 - 280;
+      this.power = 1.15;
+      game.fx.burst(this.x, this.y, { count: 18, color: '#9bf09b', type: 'spark', spMax: 480, grav: 120 });
+      game.fx.addShake(4);
+    } else if (k === 'gravity') {
+      // 引力紫：在当前位置制造一个持续吸扯的引力奇点
+      game.spawnWell(this.x, this.y, 1.25);
+      game.fx.burst(this.x, this.y, { count: 26, color: '#c8a2ff', type: 'dot', spMax: 320, grav: 0 });
+      game.fx.addShake(7);
     }
     game.syncBird(this);
     return true;

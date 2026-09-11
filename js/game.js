@@ -23,6 +23,7 @@ class Game {
     this.blocks = []; this.pigs = []; this.birds = [];
     this.springs = []; this.portals = []; this.fans = [];
     this.pendingBooms = [];
+    this.wells = [];             // 引力奇点（引力紫技能）
     this.birdQueue = [];
     this.currentBird = null;
     this.prevPath = [];
@@ -142,6 +143,7 @@ class Game {
     this.blocks = []; this.pigs = []; this.birds = [];
     this.springs = []; this.portals = []; this.fans = [];
     this.pendingBooms = [];
+    this.wells = [];
     this.prevPath = [];
     this.score = 0;
     this.combo = 0;
@@ -375,6 +377,11 @@ class Game {
     this.renderScene(dt);
   }
 
+  /** 制造一个引力奇点（引力紫的技能） */
+  spawnWell(x, y, life = 1.2, power = 1500) {
+    this.wells.push({ x, y, r: 280, life, maxLife: life, power });
+  }
+
   stepPhysics(dt) {
     // 同步外部力
     for (const b of this.blocks) {
@@ -390,6 +397,25 @@ class Game {
         for (const f of this.fans) if (f.contains(bd)) f.apply(bd.body, dt);
       }
     }
+    // 引力奇点：把范围内刚体持续拉向中心
+    for (let i = this.wells.length - 1; i >= 0; i--) {
+      const w = this.wells[i];
+      w.life -= dt;
+      if (w.life <= 0) { this.wells.splice(i, 1); continue; }
+      const fade = clamp(w.life / w.maxLife * 1.5, 0, 1);
+      for (const bd of this.world.bodies) {
+        if (bd.static || bd.removed) continue;
+        const dx = w.x - bd.x, dy = w.y - bd.y;
+        const d2 = dx * dx + dy * dy;
+        if (d2 > w.r * w.r || d2 < 1) continue;
+        const d = Math.sqrt(d2);
+        const pull = w.power * fade * (1 - d / w.r) * dt;
+        bd.vx += (dx / d) * pull;
+        bd.vy += (dy / d) * pull;
+        if (bd.wake) bd.wake();
+      }
+    }
+
     this.world.step(dt);
     // 回写
     for (const b of this.blocks) {
@@ -651,6 +677,9 @@ class Game {
     for (const f of this.fans) r.drawFan(ctx, f, this.time);
     for (const p of this.portals) r.drawPortal(ctx, p, this.time);
     for (const s of this.springs) r.drawSpring(ctx, s);
+
+    // 引力奇点（画在物体下层，形成"场"的包裹感）
+    for (const w of this.wells) r.drawWell(ctx, w, this.time);
 
     // 阴影
     for (const b of this.blocks) if (!b.dead) r.shadow(ctx, b.x, b.y, Math.max(b.w, b.h) * 0.4);

@@ -17,9 +17,11 @@ function stack(out, cx, list, baseY) {
   }
   return y;
 }
-/** 在指定顶部高度架一根横梁，返回新的顶部 y */
-function beam(out, mat, cx, topY, w, h) {
-  out.push({ mat, x: cx, y: topY - h / 2, w, h });
+/** 在指定顶部高度架一根横梁，返回新的顶部 y（extra 可传 { static:true } 做悬空固定平台） */
+function beam(out, mat, cx, topY, w, h, extra) {
+  const o = { mat, x: cx, y: topY - h / 2, w, h };
+  if (extra) Object.assign(o, extra);
+  out.push(o);
   return topY - h;
 }
 const pigOn = (topY, type) => ({ type, x: 0, y: topY - PIG_TYPES[type].r });
@@ -162,7 +164,52 @@ function L8() {
   };
 }
 
-const LEVELS = [L1, L2, L3, L4, L5, L6, L7, L8];
+/* L9：回旋试炼 —— 弹弓后方也有猪，得靠回旋绿折返才打得到 */
+function L9() {
+  const B = [], P = [];
+  // 弹弓（x=306）后方的悬空平台：必须 static，否则会自由落体
+  const lp1 = beam(B, 'wood', 140, GROUND_Y - 274, 180, 26, { static: true });
+  P.push({ type: 'normal', x: 140, y: lp1 - 26 });
+  const lp2 = beam(B, 'wood', 470, GROUND_Y - 224, 150, 26, { static: true });
+  P.push({ type: 'small', x: 470, y: lp2 - 19 });
+  // 右侧主阵地
+  const c1 = stack(B, 1120, [['wood', 40, 120], ['wood', 40, 120]]);
+  const c2 = stack(B, 1310, [['wood', 40, 120], ['wood', 40, 120]]);
+  const top = beam(B, 'wood', 1215, c1, 280, 26);
+  P.push({ type: 'normal', x: 1215, y: top - 26 });
+  const s1 = stack(B, 1480, [['stone', 46, 92]]);
+  P.push({ type: 'helmet', x: 1480, y: s1 - 28 });
+  return {
+    name: '回旋峡谷', tip: '回旋绿折返可以打身后的猪，引力紫能把远处目标吸过来',
+    decor: 'sunset', wind: 0,
+    birds: ['green', 'violet', 'green', 'red'],
+    stars: [26000, 37000, 47000],
+    blocks: B, pigs: P
+  };
+}
+
+/* L10：引力奇点 —— 猪分散在三座互不相连的高塔上，适合吸拢后一网打尽 */
+function L10() {
+  const B = [], P = [];
+  const t1 = stack(B, 900, [['stone', 40, 100], ['stone', 40, 100]]);
+  const t2 = stack(B, 1160, [['ice', 40, 100], ['ice', 40, 100]]);
+  const t3 = stack(B, 1420, [['wood', 40, 100], ['wood', 40, 100]]);
+  P.push({ type: 'normal', x: 900, y: t1 - 26 });
+  P.push({ type: 'small', x: 1160, y: t2 - 19 });
+  P.push({ type: 'helmet', x: 1420, y: t3 - 28 });
+  // 顶部横梁架在三座塔顶（t1/t2/t3 同高），猪王站在梁上
+  const cap = beam(B, 'stone', 1160, t2, 600, 30);
+  P.push({ type: 'king', x: 1160, y: cap - 46 });
+  return {
+    name: '引力奇点', tip: '猪分散在独立高塔上，用引力紫把它们吸成一堆',
+    decor: 'snow', wind: 120,
+    birds: ['violet', 'green', 'black', 'violet', 'yellow'],
+    stars: [30000, 43000, 55000],
+    blocks: B, pigs: P
+  };
+}
+
+const LEVELS = [L1, L2, L3, L4, L5, L6, L7, L8, L9, L10];
 
 function buildLevel(index) {
   const def = LEVELS[index]();

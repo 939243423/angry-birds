@@ -169,7 +169,9 @@ console.log('— 技能与连锁 —');
       red: b.armedBlast === true,
       yellow: len(b.vx, b.vy) > sp0 * 1.8,
       blue: g.birds.length === n0 + 2,
-      black: b.fuse > 0
+      black: b.fuse > 0,
+      green: b.vx < 0,               // 回旋：水平方向反转（发射时为 +x）
+      violet: g.wells.length > 0     // 引力：生成了奇点
     }[t];
     for (let s = 0; s < 420; s++) { g.stepPhysics(1 / 120); g.updateGameplay(1 / 120, 1 / 120); }
     skills[t] = `${eff ? '生效' : '✗未生效'} 得分${g.score} 击杀${g.pigs.filter(p => p.dead).length}`;

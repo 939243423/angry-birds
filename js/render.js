@@ -591,6 +591,45 @@ class Renderer {
   }
 
   /* ---------------- 机关 ---------------- */
+  /** 引力奇点：柔光球 + 三条旋涡臂 + 明亮核心 */
+  drawWell(ctx, w, t) {
+    const k = clamp(w.life / w.maxLife, 0, 1);
+    ctx.save();
+    ctx.translate(w.x, w.y);
+    ctx.globalAlpha = 0.32 + 0.5 * k;
+
+    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, w.r);
+    g.addColorStop(0, 'rgba(206,158,255,.55)');
+    g.addColorStop(0.55, 'rgba(142,82,232,.22)');
+    g.addColorStop(1, 'rgba(88,38,178,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(0, 0, w.r, 0, TAU); ctx.fill();
+
+    ctx.strokeStyle = 'rgba(226,190,255,.75)';
+    ctx.lineWidth = 3;
+    for (let arm = 0; arm < 3; arm++) {
+      ctx.beginPath();
+      const a0 = t * 5 + arm * TAU / 3;
+      for (let i = 0; i <= 22; i++) {
+        const p = i / 22;
+        const ang = a0 + p * 3.4;
+        const rr = w.r * 0.16 + p * w.r * 0.62;
+        const px = Math.cos(ang) * rr, py = Math.sin(ang) * rr;
+        i ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+      }
+      ctx.stroke();
+    }
+
+    const core = ctx.createRadialGradient(0, 0, 0, 0, 0, w.r * 0.24);
+    core.addColorStop(0, 'rgba(255,255,255,.96)');
+    core.addColorStop(0.55, 'rgba(198,148,255,.72)');
+    core.addColorStop(1, 'rgba(118,58,208,0)');
+    ctx.fillStyle = core;
+    ctx.beginPath(); ctx.arc(0, 0, w.r * 0.24, 0, TAU); ctx.fill();
+
+    ctx.restore();
+  }
+
   drawSpring(ctx, s) {
     ctx.save();
     ctx.translate(s.x, s.y);

@@ -98,6 +98,8 @@ const Sfx = {
     if (kind === 'dash') { this.tone(300, 0.2, 'sawtooth', 0.2, 1400); this.noise(0.2, 0.16, 3000, 'highpass'); }
     else if (kind === 'split') { this.tone(600, 0.1, 'sine', 0.18, 1200); this.tone(900, 0.12, 'sine', 0.15, 1500, null, 0.06); }
     else if (kind === 'bomb') { this.tone(200, 0.3, 'square', 0.16, 60); }
+    else if (kind === 'boomerang') { this.tone(520, 0.22, 'sine', 0.2, 1500); this.tone(1500, 0.18, 'sine', 0.12, 520, null, 0.08); }
+    else if (kind === 'gravity') { this.tone(120, 0.5, 'sine', 0.2, 40); this.noise(0.45, 0.14, 600, 'lowpass', 120); }
     else { this.tone(420, 0.18, 'triangle', 0.2, 900); }
   },
   spring() { this.tone(300, 0.16, 'sine', 0.24, 1100); this.tone(600, 0.1, 'sine', 0.14, 1400, null, 0.05); },
