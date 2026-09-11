@@ -201,6 +201,19 @@
       </div>
     </div>
 
+    <!-- ============ 通用确认弹窗（替代原生 confirm） ============ -->
+    <div class="screen hidden" id="screen-confirm">
+      <div class="panel confirm-panel">
+        <div class="confirm-ico" id="confirm-ico">⚠️</div>
+        <h2 class="panel-title" id="confirm-title">确认操作</h2>
+        <div class="confirm-desc" id="confirm-desc"></div>
+        <div class="confirm-buttons">
+          <button class="btn btn-ghost" id="btn-confirm-cancel">取消</button>
+          <button class="btn btn-danger" id="btn-confirm-ok">确定</button>
+        </div>
+      </div>
+    </div>
+
     <!-- 竖屏提示（仅移动端） -->
     <div id="rotate-tip" class="hidden">
       <div class="rotate-inner">

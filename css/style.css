@@ -41,6 +41,7 @@
   /* 关键尺寸 */
   --hud-gap:clamp(6px,.9vh,14px);
   --icon:clamp(30px,4.4vh,52px);
+  --panel-pad-y:clamp(18px,3.4vh,44px);
 }
 
 /* ============ 基础 ============ */
@@ -144,7 +145,7 @@ html, body {
 /* ============ Toast / 技能提示 ============ */
 #toast {
   position:absolute; left:50%; top:23%; transform:translate(-50%,-50%);
-  z-index:15;
+  z-index:30;   /* 高于全屏面板（20），保证面板打开时的提示也能被看到 */
   background:linear-gradient(180deg, rgba(32,24,14,.88), rgba(18,12,6,.9));
   color:#ffe9b8;
   padding:.62em 1.45em; border-radius:var(--r-pill);
@@ -389,9 +390,15 @@ html, body {
   background:linear-gradient(90deg, transparent, rgba(232,163,60,.85), transparent);
 }
 
+/* 底栏吸附：面板内容超长滚动时，"返回"等出口始终可见 */
 .panel-foot {
+  position:sticky; bottom:calc(-1 * var(--panel-pad-y));
+  z-index:2;
   display:flex; align-items:center; justify-content:space-between;
-  gap:1.4em; width:100%; margin-top:.3em;
+  gap:1.4em; width:100%;
+  margin-top:.3em;
+  padding:.55em 0 var(--panel-pad-y);
+  background:linear-gradient(180deg, rgba(255,247,233,0), rgba(255,247,233,.94) 38%, var(--panel-2) 100%);
 }
 .total-stars {
   font-weight:900; color:#c07f16;
@@ -571,16 +578,18 @@ html, body {
   border-top:none; padding-top:0; color:#7c5c32;
 }
 
-/* 按钮等高等宽 */
+/* 按钮等高等宽：用 grid 强制等分，避免 flex-wrap 折行后
+   最后一个按钮独占一行被拉成通栏（"按钮被拉伸"的根因） */
 .result-buttons {
-  display:flex; gap:clamp(8px,1.3vh,16px);
-  margin-top:.5em; flex-wrap:wrap; justify-content:center;
-  width:100%;
+  display:grid;
+  grid-auto-flow:column;
+  grid-auto-columns:1fr;
+  gap:clamp(8px,1.3vh,16px);
+  margin-top:.5em; width:100%;
 }
 .result-buttons .btn {
-  flex:1 1 0; min-width:0;
-  padding-left:clamp(10px,1.3vh,22px);
-  padding-right:clamp(10px,1.3vh,22px);
+  min-width:0; padding-left:clamp(6px,.9vh,22px); padding-right:clamp(6px,.9vh,22px);
+  font-size:clamp(11px,1.75vh,23px);
 }
 
 /* ============ 彩蛋关入口 ============ */
@@ -764,6 +773,55 @@ html, body {
 }
 .btn-egg.reveal { animation:eggReveal .68s var(--ease-pop); }
 
+/* ============ 通用确认弹窗（替代原生 confirm） ============ */
+.confirm-panel {
+  min-width:min(400px, 86vw);
+  max-width:min(520px, 90vw);
+  text-align:center;
+}
+.confirm-ico {
+  font-size:clamp(30px,5.6vh,64px); line-height:1;
+  filter:drop-shadow(0 5px 12px rgba(180,110,40,.38));
+}
+.confirm-desc {
+  width:100%; text-align:center;
+  font-size:clamp(11px,1.72vh,19px); line-height:1.78;
+  color:var(--ink-soft);
+  background:rgba(255,255,255,.66);
+  padding:.85em 1.2em; border-radius:var(--r-card);
+  border:2px dashed rgba(200,150,80,.45);
+}
+.confirm-buttons {
+  display:grid; grid-auto-flow:column; grid-auto-columns:1fr;
+  gap:clamp(8px,1.3vh,16px); width:100%; margin-top:.35em;
+}
+/* 面板是浅色底，默认的 ghost 按钮（白字透明底）在这里几乎看不见，
+   改为浅色实底 + 暖色描边的"次级按钮" */
+.confirm-buttons .btn-ghost {
+  background:linear-gradient(180deg,#fffdf8,#f3e7d4);
+  color:var(--ink-soft);
+  border:2px solid rgba(190,152,100,.55);
+  box-shadow:0 5px 0 rgba(184,142,92,.42), 0 9px 20px rgba(120,80,30,.16), inset 0 2px 0 #fff;
+}
+.confirm-buttons .btn-ghost:hover {
+  background:linear-gradient(180deg,#fff,#f8efdf);
+  box-shadow:0 7px 0 rgba(184,142,92,.42), 0 13px 24px rgba(120,80,30,.2), inset 0 2px 0 #fff;
+}
+.confirm-buttons .btn-ghost:active {
+  transform:translateY(3px);
+  box-shadow:0 2px 0 rgba(184,142,92,.42), 0 5px 12px rgba(120,80,30,.16), inset 0 2px 0 #fff;
+}
+
+/* 危险操作按钮（清除存档等不可逆动作） */
+.btn-danger {
+  background:linear-gradient(180deg,#ff9d86,#e0472c);
+  color:#fff6f2;
+  text-shadow:0 1px 3px rgba(120,20,0,.55);
+  box-shadow:0 6px 0 #9c2412, 0 12px 26px rgba(200,60,30,.38), inset 0 2px 0 rgba(255,255,255,.5);
+}
+.btn-danger:hover { filter:brightness(1.05); box-shadow:0 8px 0 #9c2412, 0 16px 30px rgba(200,60,30,.46), inset 0 2px 0 rgba(255,255,255,.55); }
+.btn-danger:active { box-shadow:0 2px 0 #9c2412, 0 6px 14px rgba(200,60,30,.36), inset 0 2px 0 rgba(255,255,255,.4); }
+
 /* ============ 静音按钮 ============ */
 .mute-btn {
   position:absolute; right:1.4%; bottom:3.2%; z-index:25;
@@ -843,15 +901,23 @@ html, body {
   .egg-card { min-width:0; flex:1 1 100%; }
 }
 
-/* ============ 竖屏：面板铺满视口 + HUD 收敛 ============ */
+/* ============ 竖屏：面板铺满视口 + 主菜单重排 ============ */
 @media (orientation: portrait) {
-  /* 游戏画面仍按 16:9 水平铺满，保持不变形 */
-  #stage { width:100vw; height:calc(100vw * 9 / 16); }
+  /* 画面仍按 16:9 水平铺满、垂直居中、不变形；加圆角做成"场景窗"，
+     避免在竖屏里被拉成一条无边框的窄带 */
+  #game {
+    top:50%; bottom:auto; left:50%; right:auto;
+    width:100vw; height:auto;
+    aspect-ratio:16 / 9;
+    transform:translate(-50%,-50%);
+    border-radius:clamp(10px,2.2vh,20px);
+    box-shadow:0 16px 46px rgba(0,0,0,.62), 0 0 0 2px rgba(255,255,255,.14);
+  }
 
   /* 关键：全屏面板脱离 16:9 舞台改为覆盖整个视口，
      否则在竖屏下会被压进 219px 高的窄条里导致内容裁切 */
-  #screen-menu, #screen-levels, #screen-howto,
-  #screen-result, #screen-pause, #screen-egg { position:fixed; inset:0; }
+  #screen-menu, #screen-levels, #screen-howto, #screen-result,
+  #screen-pause, #screen-egg, #screen-unlock, #screen-confirm { position:fixed; inset:0; }
   #toast, #skill-hint, #rotate-tip, .mute-btn { position:fixed; }
 
   .screen { gap:clamp(7px,1.3vh,15px); }
@@ -867,22 +933,94 @@ html, body {
   .hud-chip { font-size:clamp(8px,1.05vh,13px); padding:.26em .7em; border-width:1.5px; }
   .hud-wind { font-size:clamp(7px,.95vh,12px); padding:.16em .6em; }
 
-  .menu-buttons { gap:clamp(5px,.9vh,11px); }
+  /* ---- 主菜单：内容整体居中，消除标题与按钮之间的大片空洞 ----
+     背景的暗角按"画面窗"的上下边界淡入，让画面与四周深色自然衔接 */
+  #screen-menu {
+    background:
+      linear-gradient(180deg,
+        #0b1220 0%,
+        #0b1220 calc(50% - 100vw * 9 / 32 - 70px),
+        rgba(11,18,32,.62) calc(50% - 100vw * 9 / 32 - 18px),
+        rgba(11,18,32,.34) calc(50% - 100vw * 9 / 32 + 16px),
+        rgba(11,18,32,.24) 50%,
+        rgba(11,18,32,.34) calc(50% + 100vw * 9 / 32 - 16px),
+        rgba(11,18,32,.62) calc(50% + 100vw * 9 / 32 + 18px),
+        #0b1220 calc(50% + 100vw * 9 / 32 + 70px),
+        #0b1220 100%);
+    backdrop-filter:none;
+    /* 竖向构图：标题落在"场景窗"上半部，按钮组沉到底部拇指区，
+       中间让出场景窗下半部（草地/弹弓可见），四点式分布不再上重下轻 */
+    justify-content:flex-start;
+    gap:clamp(9px,1.8vh,22px);
+    padding:calc(var(--vh, 1vh) * 50 - 100vw * 9 / 32 - 6px) 0 clamp(10px,2vh,26px);
+  }
+  #screen-menu .menu-art { flex:0 0 auto; }
+  #screen-menu .menu-buttons { margin-top:auto; }
+  #screen-menu .title-wrap::before {
+    width:clamp(280px,88vw,560px);
+    height:clamp(150px,22vh,300px);
+    background:radial-gradient(ellipse, rgba(255,176,70,.26), rgba(255,150,40,.09) 46%, transparent 74%);
+  }
+
+  .menu-buttons { gap:clamp(6px,1vh,12px); }
   .menu-stat { font-size:clamp(9px,1.35vh,14px); }
 
   /* 标题改用 vw 基准，避免窄屏下溢出换行 */
   .game-title {
-    font-size:clamp(30px,11.5vw,62px);
+    font-size:clamp(28px,10.5vw,58px);
     letter-spacing:.05em;
     -webkit-text-stroke:clamp(2px,.34vw,4px) #8a3410;
   }
   .game-subtitle {
-    font-size:clamp(11px,3.4vw,21px);
+    font-size:clamp(11px,3.2vw,20px);
     letter-spacing:.5em; text-indent:.5em;
   }
 
-  /* 横屏提示移到顶部，避免压住底部按钮 */
-  #rotate-tip { top:max(1.6%, env(safe-area-inset-top)); bottom:auto; }
+  /* ---- 长内容面板：竖屏下收紧内边距，尽量少滚动 ---- */
+  .panel {
+    /* 同步 --panel-pad-y，让吸附底栏的偏移量跟着变 */
+    --panel-pad-y:clamp(13px,2.5vh,30px);
+    padding:var(--panel-pad-y) clamp(15px,4.4vw,34px);
+    gap:clamp(8px,1.5vh,16px);
+    max-height:94%;
+  }
+  .panel-title { font-size:clamp(17px,2.9vh,32px); }
+  /* 玩法说明改为两列竖排卡片：一屏能装下 6 条，避免长到要滚动 */
+  .howto-grid { grid-template-columns:repeat(2, 1fr); gap:clamp(6px,1vh,12px); }
+  .howto-card {
+    flex-direction:column; align-items:center; text-align:center;
+    gap:.34em;
+    padding:clamp(8px,1.25vh,15px) clamp(7px,1.1vh,13px);
+    font-size:clamp(9.5px,1.42vh,15px); line-height:1.5;
+  }
+  .howto-ico { font-size:clamp(17px,2.5vh,28px); }
+  .egg-card { padding:clamp(10px,1.8vh,20px) clamp(10px,1.5vh,18px); min-height:0; }
+  .egg-card-title { font-size:clamp(15px,2.5vh,28px); }
+  .pause-stats { font-size:clamp(10.5px,1.6vh,18px); }
+  .ps-item { padding:.4em 1em; }
+
+  /* ---- 解锁庆祝：蛋与文案按竖屏收敛 ---- */
+  #screen-unlock { gap:clamp(6px,1.4vh,16px); padding:4vh 5vw; }
+  .unlock-egg {
+    width:clamp(84px,13vh,150px);
+    height:clamp(105px,16.2vh,188px);
+  }
+  .unlock-name { font-size:clamp(23px,7vw,44px); }
+  .unlock-title { font-size:clamp(18px,2.9vh,32px); }
+  .unlock-desc { font-size:clamp(10px,1.5vh,16px); line-height:1.7; }
+
+  /* 横屏提示：顶部小尺寸，且显示数秒后自动淡出，不再长期遮挡面板标题 */
+  #rotate-tip {
+    top:max(1.2%, env(safe-area-inset-top)); bottom:auto;
+    font-size:clamp(10px,1.5vh,15px);
+    padding:.42em 1.05em;
+  }
+  #rotate-tip.autofade { animation:tipFade 1s var(--ease-out) 4.5s forwards; }
+}
+
+@keyframes tipFade {
+  from { opacity:1; transform:translateX(-50%); }
+  to   { opacity:0; transform:translateX(-50%) translateY(-8px); visibility:hidden; }
 }
 
 /* ============ 动效降级（尊重系统偏好） ============ */

@@ -15,11 +15,19 @@ function makeCtx() {
 }
 function makeEl() {
   return {
-    width: 1600, height: 900, style: {}, textContent: '', innerHTML: '', title: '',
+    width: 1600, height: 900, style: {}, textContent: '', title: '',
+    dataset: {}, _attrs: {}, _html: '', _children: [],
+    get innerHTML() { return this._html; },
+    set innerHTML(v) { this._html = String(v); this._children.length = 0; },
+    get children() { return this._children; },
+    setAttribute(k, v) { this._attrs[k] = String(v); },
+    getAttribute(k) { return this._attrs[k] === undefined ? null : this._attrs[k]; },
+    removeAttribute(k) { delete this._attrs[k]; },
     classList: { _s: new Set(), add(c) { this._s.add(c); }, remove(c) { this._s.delete(c); }, toggle(c, f) { f ? this._s.add(c) : this._s.delete(c); }, contains(c) { return this._s.has(c); } },
     getContext: () => makeCtx(),
     getBoundingClientRect: () => ({ left: 0, top: 0, width: 1600, height: 900 }),
-    appendChild() { }, addEventListener() { }, querySelector: () => makeEl(), querySelectorAll: () => [],
+    appendChild(c) { this._children.push(c); return c; },
+    addEventListener() { }, querySelector: () => makeEl(), querySelectorAll: () => [],
     get offsetWidth() { return 100; }
   };
 }
@@ -47,7 +55,8 @@ global.performance = { now: () => Date.now() };
 global.requestAnimationFrame = () => 0;
 const store = {};
 global.localStorage = { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = v; } };
-global.confirm = () => false;
+// 注意：这里刻意不提供 global.confirm —— UI 已改为自绘确认弹窗。
+// 若将来代码回归调用原生 confirm，冒烟测试会直接抛 ReferenceError 报错。
 
 const dir = path.join(__dirname, '..', 'js');
 for (const f of ['utils.js', 'audio.js', 'particles.js', 'physics.js', 'entities.js', 'levels.js', 'render.js', 'egggame.js', 'game.js'])

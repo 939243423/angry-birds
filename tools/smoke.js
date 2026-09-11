@@ -16,11 +16,19 @@ function makeCtx() {
 }
 function makeEl() {
   return {
-    width: 1600, height: 900, style: {}, textContent: '', innerHTML: '', title: '',
+    width: 1600, height: 900, style: {}, textContent: '', title: '',
+    dataset: {}, _attrs: {}, _html: '', _children: [],
+    get innerHTML() { return this._html; },
+    set innerHTML(v) { this._html = String(v); this._children.length = 0; },
+    get children() { return this._children; },
+    setAttribute(k, v) { this._attrs[k] = String(v); },
+    getAttribute(k) { return this._attrs[k] === undefined ? null : this._attrs[k]; },
+    removeAttribute(k) { delete this._attrs[k]; },
     classList: { _s: new Set(), add(c) { this._s.add(c); }, remove(c) { this._s.delete(c); }, toggle(c, f) { f ? this._s.add(c) : this._s.delete(c); }, contains(c) { return this._s.has(c); } },
     getContext: () => makeCtx(),
     getBoundingClientRect: () => ({ left: 0, top: 0, width: 1600, height: 900 }),
-    appendChild() { }, addEventListener() { }, querySelector: () => makeEl(), querySelectorAll: () => [],
+    appendChild(c) { this._children.push(c); return c; },
+    addEventListener() { }, querySelector: () => makeEl(), querySelectorAll: () => [],
     get offsetWidth() { return 100; }
   };
 }
@@ -44,7 +52,8 @@ global.performance = { now: () => Date.now() };
 global.requestAnimationFrame = () => 0;
 const store = {};
 global.localStorage = { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = v; } };
-global.confirm = () => false;
+// 刻意不提供 global.confirm：存档清除已改为自绘确认弹窗。
+// 若代码回归调用原生 confirm，此处会抛 ReferenceError 让冒烟直接失败。
 
 const dir = path.join(__dirname, '..', 'js');
 const files = ['utils.js', 'audio.js', 'particles.js', 'physics.js', 'entities.js', 'levels.js', 'render.js', 'egggame.js', 'game.js', 'ui.js'];
@@ -268,6 +277,35 @@ console.log('— UI 初始化与交互 —');
     console.log(`  ✓ 彩蛋入口 解锁前隐藏=${hiddenBefore} 解锁后显示=${shownAfter} 庆祝弹窗通过`);
     if (!hiddenBefore) bad('未解锁时彩蛋关入口不应出现');
     if (!shownAfter) bad('解锁后彩蛋关入口未显示');
+
+    // 未解锁关卡：点击必须给出明确提示（此前点了完全没有反馈）
+    const keepUnlocked = Save.data.unlocked;
+    Save.data.unlocked = 1;
+    UI.buildLevels();
+    const grid = document.getElementById('level-grid');
+    const lockedCell = grid.children[1];          // 第 2 关：未解锁
+    const hasHandler = !!(lockedCell && typeof lockedCell.onclick === 'function');
+    document.getElementById('toast').textContent = '';
+    if (hasHandler) lockedCell.onclick();
+    const hintText = document.getElementById('toast').textContent;
+    const hinted = /未解锁/.test(hintText) && /第 1 关/.test(hintText);
+    console.log(`  ${hinted ? '✓' : '✗'} 未解锁关卡点击提示: ${JSON.stringify(hintText)}`);
+    if (!hasHandler) bad('未解锁关卡没有绑定点击处理，点击无反馈');
+    if (!hinted) bad('点击未解锁关卡未给出解锁条件提示');
+    Save.data.unlocked = keepUnlocked;
+
+    // 存档清除：改为自绘确认弹窗（原生 confirm 样式无法控制，观感割裂）
+    let confirmRan = false;
+    UI.confirm({ icon: '🗑️', title: '测试确认', desc: '测试文案', okText: '确认', onOk: () => { confirmRan = true; } });
+    const cEl = document.getElementById('screen-confirm');
+    const confirmShown = !cEl.classList.contains('hidden');
+    const confirmTitle = document.getElementById('confirm-title').textContent;
+    document.getElementById('btn-confirm-ok').onclick();
+    const confirmClosed = cEl.classList.contains('hidden');
+    const ok = confirmShown && confirmRan && confirmClosed;
+    console.log(`  ${ok ? '✓' : '✗'} 确认弹窗 显示=${confirmShown} 触发回调=${confirmRan} 已关闭=${confirmClosed} 标题=${JSON.stringify(confirmTitle)}`);
+    if (!ok) bad('确认弹窗流程异常');
+    if (confirmTitle !== '测试确认') bad('确认弹窗标题未按参数渲染');
   } catch (e) {
     bad('UI 流程异常: ' + e.message + '\n' + (e.stack || '').split('\n').slice(1, 4).join('\n'));
   }

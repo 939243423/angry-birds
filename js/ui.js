@@ -38,9 +38,33 @@ const UI = {
     $('btn-levels').onclick = () => { Sfx.click(); this.buildLevels(); this.show('screen-levels'); };
     $('btn-howto').onclick = () => { Sfx.click(); this.show('screen-howto'); };
     $('btn-reset').onclick = () => {
-      if (confirm('确定要清除所有存档（星星、解锁、金羽）吗？')) {
-        Save.reset(); this.buildLevels(); this.refreshMenu(); this.toast('存档已清除');
-      }
+      Sfx.init(); Sfx.click();
+      const total = Save.totalStars;
+      this.confirm({
+        icon: '🗑️',
+        title: '清除所有存档？',
+        desc: `将删除全部关卡进度、${total} 颗星与金羽记录，且无法恢复。`,
+        okText: '确认清除',
+        danger: true,
+        back: 'screen-menu',
+        onOk: () => {
+          Save.reset();
+          this.buildLevels();
+          this.refreshMenu();
+          this.toast('存档已清除，进度已重置');
+        }
+      });
+    };
+    $('btn-confirm-ok').onclick = () => {
+      Sfx.click();
+      const cb = this._confirmCb; this._confirmCb = null;
+      this.show(this._confirmBack || 'screen-menu');
+      if (cb) cb();
+    };
+    $('btn-confirm-cancel').onclick = () => {
+      Sfx.click();
+      this._confirmCb = null;
+      this.show(this._confirmBack || 'screen-menu');
     };
     $('btn-back-menu').onclick = () => { Sfx.click(); this.show('screen-menu'); };
     $('btn-back-menu2').onclick = () => { Sfx.click(); this.show('screen-menu'); };
@@ -99,11 +123,29 @@ const UI = {
 
   /* ---------------- 界面切换 ---------------- */
   show(id) {
-    ['screen-menu', 'screen-levels', 'screen-howto', 'screen-result', 'screen-pause', 'screen-egg', 'screen-unlock'].forEach(s => {
+    ['screen-menu', 'screen-levels', 'screen-howto', 'screen-result',
+     'screen-pause', 'screen-egg', 'screen-unlock', 'screen-confirm'].forEach(s => {
       $(s).classList.add('hidden');
     });
     $('hud').classList.toggle('hidden', !(id === null && this.game.mode === 'birds'));
     if (id) $(id).classList.remove('hidden');
+  },
+
+  /* 通用确认弹窗：替代原生 confirm（系统弹窗样式无法控制，观感割裂） */
+  confirm(opts) {
+    const o = opts || {};
+    this._confirmCb = o.onOk || null;
+    const set = (id, v) => { const e = $(id); if (e) e.textContent = v; };
+    set('confirm-ico', o.icon || '⚠️');
+    set('confirm-title', o.title || '确认操作');
+    set('confirm-desc', o.desc || '');
+    const ok = $('btn-confirm-ok');
+    if (ok) {
+      ok.textContent = o.okText || '确定';
+      ok.classList.toggle('btn-danger', o.danger !== false);
+    }
+    this._confirmBack = o.back || 'screen-menu';
+    this.show('screen-confirm');
   },
 
   toast(text, ms = 2000) {
@@ -180,11 +222,24 @@ const UI = {
       const rec = Save.data.levels[i] || { stars: 0 };
       const cell = document.createElement('div');
       cell.className = 'level-cell' + (unlocked ? (rec.stars > 0 ? ' cleared' : '') : ' locked');
-      cell.innerHTML = `<div class="lv-num">${i + 1}</div><div class="lv-stars">${'★'.repeat(rec.stars)}${'☆'.repeat(3 - rec.stars)}</div>`;
       if (unlocked) {
+        cell.innerHTML = `<div class="lv-num">${i + 1}</div><div class="lv-stars">${'★'.repeat(rec.stars)}${'☆'.repeat(3 - rec.stars)}</div>`;
         cell.onclick = () => { Sfx.click(); this.startLevel(i); };
         cell.title = LEVELS[i]().name;
-      } else cell.innerHTML = `<div class="lv-num">🔒</div><div class="lv-stars">未解锁</div>`;
+        cell.setAttribute('role', 'button');
+        cell.setAttribute('aria-label', `第 ${i + 1} 关 ${LEVELS[i]().name}`);
+      } else {
+        // 锁定的关卡也响应点击，给出明确的解锁条件提示（此前点了没有任何反馈）
+        cell.innerHTML = '<div class="lv-num">🔒</div><div class="lv-stars">未解锁</div>';
+        const need = i;   // 需要通关的前一关（1 基序号即 i）
+        cell.onclick = () => {
+          Sfx.click();
+          this.toast(`第 ${i + 1} 关尚未解锁 —— 先通关第 ${need} 关`, 2400);
+        };
+        cell.title = `通关第 ${need} 关后解锁`;
+        cell.setAttribute('role', 'button');
+        cell.setAttribute('aria-label', `第 ${i + 1} 关 未解锁，需先通关第 ${need} 关`);
+      }
       grid.appendChild(cell);
     });
     $('total-stars').textContent = Save.totalStars;
@@ -325,7 +380,16 @@ const UI = {
       const portrait = window.innerHeight > window.innerWidth;
       const tip = $('rotate-tip');
       if (tip) {
-        tip.classList.toggle('hidden', !(portrait && this.isTouch()));
+        const show = portrait && this.isTouch();
+        tip.classList.toggle('hidden', !show);
+        // 提示只在前几秒强调一次，之后自动淡出，避免长期遮挡面板标题
+        if (show && !tip.dataset.timed) {
+          tip.dataset.timed = '1';
+          tip.classList.add('autofade');
+        } else if (!show) {
+          tip.classList.remove('autofade');
+          delete tip.dataset.timed;
+        }
       }
       document.body && document.body.classList.toggle('portrait', portrait);
     };
