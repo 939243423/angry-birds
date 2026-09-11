@@ -754,14 +754,17 @@ class Game {
     if (win && this.levelIndex + 1 >= Save.data.unlocked) {
       Save.data.unlocked = Math.min(LEVELS.length, this.levelIndex + 2);
     }
-    // 彩蛋关解锁条件：在第 3 关拿到 2 星及以上
+    // 彩蛋关解锁条件：累计 EGG_UNLOCK_STARS 颗星（不限关卡，任意关都能贡献）
+    // 旧条件「第 3 关 2 星」把门槛绑死在单关，玩家如果卡在第 3 关就永远拿不到；
+    // 改成累计星数后可分多次推进，且与「通关必得 1 星」配套 —— 通关 6 关即可解锁。
     let eggHint = '';
-    if (win && this.levelIndex === 2 && !Save.data.eggUnlocked) {
-      if (stars >= 2) {
+    if (win && !Save.data.eggUnlocked) {
+      const have = Save.totalStars;                 // 已含本关刚结算的星数
+      if (have >= EGG_UNLOCK_STARS) {
         Save.data.eggUnlocked = true;
         this.justUnlockedEgg = true;
       } else {
-        eggHint = `隐藏关卡解锁条件：本关拿到 2 星（本次 ${stars} 星，还差 ${2 - stars} 星）`;
+        eggHint = `隐藏关卡解锁条件：累计 ${EGG_UNLOCK_STARS} 颗星（当前 ${have} 颗，还差 ${EGG_UNLOCK_STARS - have} 颗）`;
       }
     }
     Save.save();

@@ -26,6 +26,14 @@ function beam(out, mat, cx, topY, w, h, extra) {
 }
 const pigOn = (topY, type) => ({ type, x: 0, y: topY - PIG_TYPES[type].r });
 
+/* 星级门槛说明（stars: [1星, 2星, 3星]）
+ * 1 星门槛必须 **低于「最低通关分」**（= 全场猪分 + 全部砖块分，即用尽所有鸟才通关也能拿到的分数）。
+ * 否则会出现"打通了却是 0 星"的挫败感 —— L1 就踩过：最低通关 9500 而门槛设成 13000。
+ * 分数公式见 game.js finishLevel()：猪分 + 砖块分 + 剩余小鸟 ×10000。
+ * 各关最低通关分：L1 9500 / L2 16000 / L3 16500 / L4 20400 / L5 18800
+ *                L6 26000 / L7 22350 / L8 43000 / L9 24200 / L10 30900
+ */
+
 function L1() {
   const B = [], P = [];
   const t1 = stack(B, 1105, [['wood', 26, 110]]);
@@ -33,7 +41,7 @@ function L1() {
   const top = beam(B, 'wood', 1170, t1, 180, 26);
   P.push({ type: 'normal', x: 1150, y: top - 26 });
   P.push({ type: 'small', x: 1330, y: GROUND_Y - 19 });
-  return { name: '初次试飞', tip: '拖动小鸟蓄力，松手发射', decor: 'day', wind: 0, birds: ['red', 'red', 'red'], stars: [13000, 19000, 24000], blocks: B, pigs: P };
+  return { name: '初次试飞', tip: '拖动小鸟蓄力，松手发射', decor: 'day', wind: 0, birds: ['red', 'red', 'red'], stars: [8500, 19000, 24000], blocks: B, pigs: P };
 }
 
 function L2() {
@@ -47,7 +55,7 @@ function L2() {
   P.push({ type: 'normal', x: 1171, y: t6 - 26 });
   P.push({ type: 'small', x: 1420, y: GROUND_Y - 19 });
   P.push({ type: 'small', x: 985, y: GROUND_Y - 19 });
-  return { name: '木石之塔', tip: '黄鸟的超音冲刺能穿透木头', decor: 'day', wind: 0, birds: ['red', 'yellow', 'red'], stars: [16000, 23000, 29000], blocks: B, pigs: P };
+  return { name: '木石之塔', tip: '黄鸟的超音冲刺能穿透木头', decor: 'day', wind: 0, birds: ['red', 'yellow', 'red'], stars: [14000, 23000, 29000], blocks: B, pigs: P };
 }
 
 function L3() {
@@ -64,7 +72,7 @@ function L3() {
   const h2 = beam(B, 'wood', 990, h1, 130, 24);
   P.push({ type: 'small', x: 990, y: h2 - 19 });
   P.push({ type: 'small', x: 1430, y: GROUND_Y - 19 });
-  return { name: '烈焰引爆', tip: '打爆 TNT 可引发连锁爆炸', decor: 'sunset', wind: 0, birds: ['red', 'black', 'yellow'], stars: [16500, 24000, 30000], blocks: B, pigs: P };
+  return { name: '烈焰引爆', tip: '打爆 TNT 可引发连锁爆炸', decor: 'sunset', wind: 0, birds: ['red', 'black', 'yellow'], stars: [14500, 24000, 30000], blocks: B, pigs: P };
 }
 
 function L4() {
@@ -79,7 +87,7 @@ function L4() {
   P.push({ type: 'small', x: 1240, y: GROUND_Y - 19 });
   return {
     name: '弹簧蹦床', tip: '踩上弹簧板可以高高弹起', decor: 'day', wind: 0,
-    birds: ['red', 'blue', 'yellow', 'red'], stars: [22000, 32000, 40000],
+    birds: ['red', 'blue', 'yellow', 'red'], stars: [18000, 32000, 40000],
     blocks: B, pigs: P, springs: [[1050, GROUND_Y - 10, 'up']]
   };
 }
@@ -97,7 +105,7 @@ function L5() {
   P.push({ type: 'small', x: 980, y: g2 - 19 });
   return {
     name: '空间传送', tip: '飞进蓝色门，会从橙色门射出', decor: 'night', wind: 0,
-    birds: ['red', 'yellow', 'blue', 'red'], stars: [22000, 31500, 39500],
+    birds: ['red', 'yellow', 'blue', 'red'], stars: [17000, 31500, 39500],
     blocks: B, pigs: P,
     portals: [[840, 520, 180 * D2R, 1410, 300, 90 * D2R]]
   };
@@ -116,7 +124,7 @@ function L6() {
   P.push({ type: 'helmet', x: 1470, y: GROUND_Y - 28 });
   return {
     name: '气球猪与风', tip: '打爆气球让猪摔下来，注意风向', decor: 'sunset', wind: -210,
-    birds: ['red', 'blue', 'yellow', 'black'], stars: [25500, 36500, 46000],
+    birds: ['red', 'blue', 'yellow', 'black'], stars: [24000, 36500, 46000],
     blocks: B, pigs: P
   };
 }
@@ -135,7 +143,7 @@ function L7() {
   P.push({ type: 'helmet', x: 1500, y: s1 - 28 });
   return {
     name: '冰川裂隙', tip: '蓝鸟专破冰块，上升气流能托住飞行物', decor: 'snow', wind: 160,
-    birds: ['blue', 'black', 'blue', 'yellow'], stars: [23500, 33500, 42500],
+    birds: ['blue', 'black', 'blue', 'yellow'], stars: [20000, 33500, 42500],
     blocks: B, pigs: P, fans: [[1000, 520, 220, 420, 'up', 1600]]
   };
 }
@@ -183,7 +191,7 @@ function L9() {
     name: '回旋峡谷', tip: '回旋绿折返可以打身后的猪，引力紫能把远处目标吸过来',
     decor: 'sunset', wind: 0,
     birds: ['green', 'violet', 'green', 'red'],
-    stars: [26000, 37000, 47000],
+    stars: [22000, 37000, 47000],
     blocks: B, pigs: P
   };
 }
@@ -204,7 +212,7 @@ function L10() {
     name: '引力奇点', tip: '猪分散在独立高塔上，用引力紫把它们吸成一堆',
     decor: 'snow', wind: 120,
     birds: ['violet', 'green', 'black', 'violet', 'yellow'],
-    stars: [30000, 43000, 55000],
+    stars: [28000, 43000, 55000],
     blocks: B, pigs: P
   };
 }

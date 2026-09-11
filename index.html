@@ -146,7 +146,7 @@
       </div>
     </div>
 
-    <!-- ============ 彩蛋关解锁庆祝（首次通关第 3 关触发） ============ -->
+    <!-- ============ 彩蛋关解锁庆祝（首次集齐解锁所需星数时触发） ============ -->
     <div class="screen hidden" id="screen-unlock">
       <div class="unlock-egg">
         <div class="egg-shell"><span class="egg-shine"></span></div>
@@ -155,7 +155,7 @@
       <h2 class="unlock-title">隐藏玩法解锁！</h2>
       <div class="unlock-name">蛋 了 个 蛋</div>
       <div class="unlock-desc">
-        恭喜通关前三关 —— 「羊了个羊」式堆叠三消关卡现已开启。<br>
+        恭喜集齐 <b>6</b> 颗星 —— 「羊了个羊」式堆叠三消关卡现已开启。<br>
         7 格槽位，凑齐三张相同图案即可消除，槽满即败。
       </div>
       <div class="unlock-reward">
@@ -268,6 +268,13 @@
                      placeholder="例如：QQ/邮箱 / 卡在哪一关">
             </label>
             <div class="rescue-hint" id="rescue-feedback"></div>
+            <!-- 本项目激活码是纯前端校验、没有真实发码后端；
+                 直接摆出演示码，省掉"码是多少"的来回查找成本（点击即自动填入并激活） -->
+            <div class="rescue-demo">
+              演示码
+              <button type="button" class="rescue-demo-code" id="btn-rescue-demo">DEMORESE</button>
+              点击自动填入
+            </div>
           </div>
           <div class="rescue-buttons">
             <button class="btn btn-warning hidden" id="btn-rescue-reset">清空刷新</button>

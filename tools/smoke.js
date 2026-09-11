@@ -507,6 +507,24 @@ console.log('— 救援配额（每日次数 / 清空机会 / 激活码） —')
   if (typeof sample !== 'string' || sample.length !== 8) bad('genRescueCode 未返回 8 位字符串');
   if (!Save._checkRescueCode(sample)) bad('genRescueCode 生成的码校验失败');
 
+  // 弹窗里摆出的演示码必须真的能激活（直接读 index.html，避免"文档写了但页面展示的是别的"）
+  const rootDir = path.join(__dirname, '..');
+  const htmlForDemo = fs.readFileSync(path.join(rootDir, 'index.html'), 'utf8');
+  const demoMatch = /id="btn-rescue-demo"[^>]*>\s*([0-9A-Za-z]+)\s*</.exec(htmlForDemo);
+  const demoCode = demoMatch ? demoMatch[1].trim().toUpperCase() : '';
+  const demoOk = demoCode.length === 8 && Save._checkRescueCode(demoCode);
+  console.log(`  ${demoOk ? '✓' : '✗'} 弹窗演示码 ${demoCode || '(未找到)'} 校验通过=${demoOk}`);
+  if (!demoOk) bad('index.html 救援弹窗里展示的演示码无法通过校验');
+
+  // README「演示可用的码」一行里列出的码也必须全部有效
+  const readme = fs.readFileSync(path.join(rootDir, 'README.md'), 'utf8');
+  const demoLine = /演示可用的码：([^\n]+)/.exec(readme);
+  const readmeCodes = demoLine ? (demoLine[1].match(/[0-9A-Z]{8}/g) || []) : [];
+  const badCodes = readmeCodes.filter(c => !Save._checkRescueCode(c));
+  console.log(`  ${readmeCodes.length && !badCodes.length ? '✓' : '✗'} README 演示码 ${readmeCodes.join('/') || '(未找到)'} 全部有效=${!badCodes.length}`);
+  if (!readmeCodes.length) bad('README 里没有列出演示用激活码');
+  if (badCodes.length) bad('README 列出的激活码校验失败: ' + badCodes.join(', '));
+
   Save.reset();
 }
 
@@ -696,6 +714,33 @@ console.log('— UI 初始化与交互 —');
     if (resetsNow !== 1) bad('清档必须消耗 1 次清空机会（Save.reset 会复位，UI 需显式扣回）');
     if (dailyNow !== 3) bad('清档后今日救援次数应恢复为 3');
     if (creditNow !== 4) bad('清档不应没收激活码充入的额外次数');
+
+    // 回归：从主菜单「清除存档 / 申请救援次数」入口打开弹窗后点「放弃」，
+    // 必须回到主菜单、菜单可见。曾经不区分来源就 show(null) + phase='losing'：
+    // 主菜单场景下 game.mode 还是 'menu'，show(null) 会把所有面板一起隐藏，
+    // 而 HUD 只在 play 模式显示 → 整屏空白、点什么都没反应。
+    Save.reset();
+    Save.data.rescueCount = 3; Save.data.rescueResets = 0; Save.save();   // 今日用完 + 清空耗尽 → 走 forceActivate 路径
+    UI.promptRescue({ pigsLeft: 0, rescueLeft: 0, resetLeft: 0, forceActivate: true });
+    const rescueShown = !document.getElementById('screen-rescue').classList.contains('hidden');
+    UI.game.mode = 'menu';                       // 模拟"从主菜单进来申请"的场景
+    UI.game.phase = 'aim';
+    UI._rescueGiveup();
+    const backToMenu = !document.getElementById('screen-menu').classList.contains('hidden');
+    const rescueHidden = document.getElementById('screen-rescue').classList.contains('hidden');
+    const giveupOk = rescueShown && backToMenu && rescueHidden;
+    console.log(`  ${giveupOk ? '✓' : '✗'} 放弃救援回主菜单：弹窗显示=${rescueShown} 主菜单可见=${backToMenu} 弹窗关闭=${rescueHidden}`);
+    if (!giveupOk) bad('从主菜单申请救援次数后点「放弃」没有回到主菜单（会导致整屏空白卡死）');
+
+    // 关卡内点「放弃救援」仍应走判负结算（不能误伤成回主菜单）
+    Save.reset();
+    UI.game.mode = 'birds';
+    UI.game.phase = 'rescue';
+    UI.promptRescue({ pigsLeft: 2, rescueLeft: 3, resetLeft: 3 });
+    UI._rescueGiveup();
+    const losingOk = UI.game.phase === 'losing';
+    console.log(`  ${losingOk ? '✓' : '✗'} 关卡内放弃救援走判负：phase=${UI.game.phase}`);
+    if (!losingOk) bad('关卡内放弃救援没有走判负流程');
   } catch (e) {
     bad('UI 流程异常: ' + e.message + '\n' + (e.stack || '').split('\n').slice(1, 4).join('\n'));
   }
@@ -719,10 +764,21 @@ console.log('— 得分飘字 / 解锁门槛 —');
   console.log(`  ${flat ? '✓' : '✗'} 飘字朝向：保持水平（不随机旋转）`);
   if (!flat) bad('飘字被随机角度旋转');
 
-  // 彩蛋关解锁门槛：第 3 关拿到 2 星才算达成
-  const probe = (lvlIdx, score) => {
+  // 彩蛋关解锁门槛：累计 EGG_UNLOCK_STARS 颗星（不限关卡，任意关都能贡献）
+  // 旧条件「第 3 关 2 星」把门槛绑死在单关，玩家卡在那关就永远解锁不了。
+  const probe = (lvlIdx, score, preStars) => {
     Save.data.levels = {};
     Save.data.eggUnlocked = false;
+    // 预置"之前已打过的关"的星数（跳过目标关，避免被本次通关结算覆盖）
+    let need = preStars | 0, i = 0;
+    while (need > 0 && i < LEVELS.length) {
+      if (i !== lvlIdx) {
+        const s = Math.min(3, need);
+        Save.data.levels[i] = { stars: s, score: 999999 };
+        need -= s;
+      }
+      i++;
+    }
     const gg = new Game(makeEl());
     gg.loadLevel(lvlIdx);
     gg.birdQueue.length = 0;          // 屏蔽剩余小鸟奖励，精确控制分数
@@ -730,12 +786,49 @@ console.log('— 得分飘字 / 解锁门槛 —');
     gg.finishLevel(true);
     return Save.data.eggUnlocked;
   };
-  const tier = LEVELS[2]().stars;
-  const at1 = probe(2, tier[0]);      // 恰好 1 星
-  const at2 = probe(2, tier[1]);      // 恰好 2 星
-  console.log(`  ${!at1 && at2 ? '✓' : '✗'} 解锁门槛：第3关 1星→${at1 ? '解锁' : '未解锁'}，2星→${at2 ? '解锁' : '未解锁'}`);
-  if (at1) bad('第 3 关 1 星不应解锁彩蛋关');
-  if (!at2) bad('第 3 关 2 星应解锁彩蛋关');
+  const t0 = LEVELS[0]().stars;
+  const below = probe(0, t0[0], EGG_UNLOCK_STARS - 2);   // 前置 4 星 + 本关 1 星 = 5 < 6 → 不解锁
+  const reach = probe(0, t0[0], EGG_UNLOCK_STARS - 1);   // 前置 5 星 + 本关 1 星 = 6 → 解锁
+  console.log(`  ${!below && reach ? '✓' : '✗'} 解锁门槛：累计 ${EGG_UNLOCK_STARS - 1} 星→${below ? '解锁' : '未解锁'}，累计 ${EGG_UNLOCK_STARS} 星→${reach ? '解锁' : '未解锁'}`);
+  if (below) bad(`累计星数不足 ${EGG_UNLOCK_STARS} 时不应解锁彩蛋关`);
+  if (!reach) bad(`累计 ${EGG_UNLOCK_STARS} 星应解锁彩蛋关`);
+
+  // 未达门槛时的提示文案应说明"累计多少星、还差几颗"
+  Save.data.levels = {}; Save.data.eggUnlocked = false;
+  const gg2 = new Game(makeEl());
+  gg2.loadLevel(0);
+  gg2.birdQueue.length = 0;
+  gg2.score = t0[0];
+  let hintText = '';
+  gg2.onFinish = (res) => { hintText = res.eggHint || ''; };
+  gg2.finishLevel(true);
+  const hintOk = /累计/.test(hintText) && /还差/.test(hintText);
+  console.log(`  ${hintOk ? '✓' : '✗'} 未达门槛提示文案: ${JSON.stringify(hintText)}`);
+  if (!hintOk) bad('未达解锁门槛时应提示"累计 N 颗星、还差几颗"');
+  Save.reset();
+}
+
+/* ---------- 4.95 通关必得星（1 星门槛 < 最低通关分） ---------- */
+console.log('— 通关必得星（1 星门槛 vs 最低通关分） —');
+{
+  // 最低通关分 = 全场猪分 + 全部砖块分（即用尽所有鸟才通关也能拿到的分数）。
+  // 1 星门槛必须低于它，否则会出现"打通了却 0 星"的挫败感 ——
+  // L1 曾踩过：最低通关 9500，而 1 星门槛设成 13000。
+  const PIG_SCORE = { small: 3000, normal: 5000, helmet: 7000, king: 12000 };
+  let allOk = true;
+  for (let i = 0; i < LEVELS.length; i++) {
+    const d = LEVELS[i]();
+    const pigScore = d.pigs.reduce((s, p) => s + PIG_SCORE[p.type], 0);
+    const blkScore = d.blocks.reduce((s, b) => s + MATERIALS[b.mat].score, 0);
+    const lowest = pigScore + blkScore;
+    const oneBird = lowest + (d.birds.length - 1) * 10000;      // 1 只鸟通关（理论最高）
+    const ok1 = d.stars[0] < lowest;                            // 通关必得 ≥1 星
+    const ok3 = d.stars[2] < oneBird;                           // 3 星可达
+    const inc = d.stars[0] < d.stars[1] && d.stars[1] < d.stars[2];
+    if (!ok1 || !ok3 || !inc) allOk = false;
+    console.log(`  第${i + 1}关: 1星门槛 ${d.stars[0]} < 最低通关 ${lowest} ${ok1 ? '✓' : '✗'} | 3星 ${d.stars[2]} < 满鸟 ${oneBird} ${ok3 ? '✓' : '✗'} | 递增 ${inc ? '✓' : '✗'}`);
+  }
+  if (!allOk) bad('存在星级门槛异常（通关可能 0 星 / 3 星不可达 / 门槛不递增）');
   Save.reset();
 }
 

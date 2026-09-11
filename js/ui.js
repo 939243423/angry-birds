@@ -98,6 +98,13 @@ const UI = {
     $('btn-rescue-giveup').onclick = () => { Sfx.click(); this._rescueGiveup(); };
     $('btn-rescue-giveup2').onclick = () => { Sfx.click(); this._rescueGiveup(); };
     $('btn-rescue-activate').onclick = () => { Sfx.click(); this._rescueActivate(); };
+    // 演示码一键填入：本项目没有真实发码后端，直接把码摆出来减少来回查找
+    const demoBtn = $('btn-rescue-demo');
+    if (demoBtn) demoBtn.onclick = () => {
+      Sfx.click();
+      const ci = $('rescue-code');
+      if (ci) { ci.value = demoBtn.textContent.trim().toUpperCase(); ci.focus(); }
+    };
     // 激活码输入即时反馈：长度到 8 自动触发激活（键盘友好）
     $('rescue-code').addEventListener('keydown', (e) => {
       if (e.key === 'Enter') { e.preventDefault(); this._rescueActivate(); }
@@ -476,7 +483,7 @@ const UI = {
           (resetLeft > 0 ? `<br>你也可以消耗 1 次清空机会把救援次数直接刷回 3 次。` : '');
       }
     }
-    this._rescueCtx = { pigsLeft };
+    this._rescueCtx = { pigsLeft, forceActivate };
     this.show('screen-rescue');
     // 自动聚焦激活码输入框（仅激活码模式）
     if (rescueLeft === 0 || forceActivate) {
@@ -499,11 +506,23 @@ const UI = {
     this.show(null);
   },
 
-  /** 玩家点击「放弃救援」—— 直接判负 */
+  /** 玩家点击「放弃救援」。两种情况必须分开处理：
+   *  ① 关卡内触发的救援 → 本关判负，正常走结算；
+   *  ② 从主菜单「清除存档 / 申请救援次数」入口进来的（forceActivate）→ 回主菜单。
+   *  曾经不加区分地 show(null) + phase='losing' —— 但主菜单场景下 game.mode 仍是 'menu'，
+   *  show(null) 会把所有面板一起隐藏，而 HUD 只在 play 模式显示，于是整屏空白且无法点任何东西。 */
   _rescueGiveup() {
     const g = this.game;
-    this.show(null);
-    g.phase = 'losing'; g.endTimer = 1.1; Sfx.lose();
+    const ctx = this._rescueCtx || {};
+    const inLevel = g.mode === 'birds' && g.phase === 'rescue' && !ctx.forceActivate;
+    if (inLevel) {
+      this.show(null);
+      g.phase = 'losing'; g.endTimer = 1.1; Sfx.lose();
+      return;
+    }
+    this._rescueCtx = null;
+    this.show('screen-menu');
+    this.refreshMenu();
   },
 
   /** 玩家点击「立即激活」 */
@@ -514,25 +533,39 @@ const UI = {
     this._rescueFeedback(res.msg, res.ok ? 'success' : 'error');
     if (res.ok) {
       this.refreshMenu();
+      this._afterRescueGranted();
+    }
+  },
+
+  /** 激活码 / 清空刷新成功后：只有「关卡内确实卡住了」才继续问是否使用救援；
+   *  从主菜单进来申请的（没有进行中的关卡）直接回菜单 —— 否则会弹出一个
+   *  「召唤救援巨鸟？」确认框，而点「使用救援」必然失败（phase 不是 rescue）。 */
+  _afterRescueGranted(doneMsg) {
+    const g = this.game;
+    const inLevel = g.mode === 'birds' && g.phase === 'rescue';
+    if (inLevel) {
       // 1 秒后重新弹出确认模式，让玩家再次决定是否使用救援
       setTimeout(() => this.promptRescue({
-        pigsLeft: this._rescueCtx && this._rescueCtx.pigsLeft || 0,
+        pigsLeft: (this._rescueCtx && this._rescueCtx.pigsLeft) || 0,
         rescueLeft: Save.rescueLeft,
         resetLeft: Save.data.rescueResets
       }), 900);
+      return;
     }
+    setTimeout(() => {
+      this._rescueCtx = null;
+      this.show('screen-menu');
+      this.refreshMenu();
+      this.toast(doneMsg || '激活成功，救援次数已到账');
+    }, 900);
   },
 
   /** 玩家点击「用清空次数刷新救援」 */
   _rescueUseReset() {
     if (Save.useResetForRescue()) {
-      this._rescueFeedback('已消耗清空次数，今日救援次数刷新为 3', 'success');
+      this._rescueFeedback('已消耗清空次数，救援次数已刷新', 'success');
       this.refreshMenu();
-      setTimeout(() => this.promptRescue({
-        pigsLeft: this._rescueCtx && this._rescueCtx.pigsLeft || 0,
-        rescueLeft: Save.rescueLeft,
-        resetLeft: Save.data.rescueResets
-      }), 900);
+      this._afterRescueGranted('清空机会已消耗，救援次数已刷新');
     } else {
       this._rescueFeedback('无法使用（可能已没有清空机会或今日还有次数）', 'error');
     }
