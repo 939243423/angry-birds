@@ -132,6 +132,32 @@ class ParticleSystem {
           ctx.strokeText(p.text, 0, 0); ctx.fillText(p.text, 0, 0);
           break;
         }
+        case 'bigtext': {
+          // 终结大字：90+ 像素、双层描边 + 轻微下沉浮现动效，
+          // 让「FINISH! 救援成功」之类文字压住画面但不抢角色戏。
+          if (!p.text) break;
+          const t = p.life / p.maxLife;
+          const pop = t < 0.18 ? easeOutBack(1 - (0.18 - t) / 0.18) : 1;
+          ctx.save();
+          ctx.translate(0, (1 - pop) * -22);
+          ctx.scale(pop, pop);
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.font = `900 ${p.size}px "PingFang SC", system-ui, sans-serif`;
+          ctx.lineJoin = 'round';
+          // 外层深色描边（厚）—— 让任何背景都能看清
+          ctx.lineWidth = Math.max(8, p.size * 0.18);
+          ctx.strokeStyle = p.stroke || '#5a2a06';
+          ctx.strokeText(p.text, 0, 0);
+          // 内层暖色描边（薄）—— 增加质感
+          ctx.lineWidth = Math.max(2, p.size * 0.04);
+          ctx.strokeStyle = 'rgba(255,255,255,.35)';
+          ctx.strokeText(p.text, 0, 0);
+          // 填充
+          ctx.fillStyle = p.color;
+          ctx.fillText(p.text, 0, 0);
+          ctx.restore();
+          break;
+        }
         case 'confetti': {
           const s = p.size;
           ctx.fillStyle = p.color;
@@ -260,6 +286,15 @@ class Fx {
       type: 'text', text, color, grav: 300, drag: 1.1,
       rot: rand(-0.05, 0.05),   // 默认 rot 是 0~2π 随机角，会把飘字转歪，这里收敛为轻微倾斜
       vr: 0                     // 飘字不自旋
+    }));
+  }
+  /** 大字飘字：专用于结算 / 斩杀 / 通关类提示。60+ 像素、双层描边、轻微上飘后停住。 */
+  bigText(x, y, text, color = '#fff4d6', size = 72, stroke = '#7a3008') {
+    this.p.add(new Particle({
+      x, y, vx: 0, vy: -32, life: 1.55, size,
+      type: 'bigtext', text, color, stroke,
+      grav: 36, drag: 2.4,
+      rot: 0, vr: 0
     }));
   }
   confetti(x, y, n = 40) {

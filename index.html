@@ -62,6 +62,10 @@
         <span class="stat-sep" id="menu-stat-sep"></span>
         <span id="menu-feathers-stat">🥇 <b id="menu-feathers">0</b> / 3 金羽</span>
       </div>
+      <div class="menu-rescue-stat" id="menu-rescue-stat">
+        <span class="rescue-inline" id="menu-rescue-inline">🚁 救援 <b id="menu-rescue-left">3</b>/3</span>
+        <span class="rescue-inline" id="menu-reset-inline">♻️ 清空 <b id="menu-reset-left">3</b>/3</span>
+      </div>
       <div class="menu-footer">拖动弹弓发射 · 飞行中点击 / 空格释放技能</div>
     </div>
 
@@ -214,6 +218,60 @@
         <div class="confirm-buttons">
           <button class="btn btn-ghost" id="btn-confirm-cancel">取消</button>
           <button class="btn btn-danger" id="btn-confirm-ok">确定</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 救援请求 / 激活码申请 弹窗 ============ -->
+    <div class="screen hidden" id="screen-rescue">
+      <div class="panel rescue-panel">
+        <div class="rescue-strip">
+          <span class="rescue-stat" id="rescue-stat">🚁 救援 <b id="rescue-left">3</b>/<i>3</i>（今日）</span>
+          <span class="rescue-stat" id="rescue-reset-stat">♻️ 清空机会 <b id="rescue-resets">3</b>/<i>3</i></span>
+        </div>
+
+        <!-- 模式 A：救援请求（默认：还有救援次数时） -->
+        <div class="rescue-mode" id="rescue-mode-confirm">
+          <div class="rescue-ico">🚁</div>
+          <h2 class="panel-title" id="rescue-title">召唤救援巨鸟？</h2>
+          <div class="rescue-desc" id="rescue-desc">
+            「泰坦巨力」将于本关登场 —— 撞击即引发毁灭冲击，<b>必定清场</b>。<br>
+            确认使用后本关将<b>直接判胜</b>，剩余鸟不再发射。
+          </div>
+          <div class="rescue-buttons">
+            <button class="btn btn-ghost" id="btn-rescue-giveup">放弃救援</button>
+            <button class="btn btn-primary" id="btn-rescue-confirm">使用救援</button>
+          </div>
+        </div>
+
+        <!-- 模式 B：激活码申请（今日次数 + 清空次数都用完时） -->
+        <div class="rescue-mode hidden" id="rescue-mode-activate">
+          <div class="rescue-ico">🔑</div>
+          <h2 class="panel-title">申请救援次数</h2>
+          <div class="rescue-desc">
+            今日救援次数 <b>已用完</b>，清空机会 <b>已耗尽</b>。<br>
+            请输入 8 位激活码（向开发者申请），通过后立即获得 <b>5</b> 次救援次数。
+          </div>
+          <div class="rescue-form">
+            <label class="rescue-label">
+              <span>激活码</span>
+              <input type="text" id="rescue-code" class="rescue-code-input"
+                     maxlength="8" autocomplete="off" spellcheck="false"
+                     placeholder="8 位字符">
+            </label>
+            <label class="rescue-label">
+              <span>申请说明（可选）</span>
+              <input type="text" id="rescue-note" class="rescue-note-input"
+                     maxlength="120" autocomplete="off"
+                     placeholder="例如：QQ/邮箱 / 卡在哪一关">
+            </label>
+            <div class="rescue-hint" id="rescue-feedback"></div>
+          </div>
+          <div class="rescue-buttons">
+            <button class="btn btn-warning hidden" id="btn-rescue-reset">清空刷新</button>
+            <button class="btn btn-primary" id="btn-rescue-activate">立即激活</button>
+            <button class="btn btn-ghost" id="btn-rescue-giveup2">放弃</button>
+          </div>
         </div>
       </div>
     </div>

@@ -33,7 +33,7 @@ class Game {
     this.camX = 0; this.camZoom = 1;
     this.settleTimer = 0;
     this.endTimer = 0;
-    this.rescueUsed = false;     // 每关一次的救援巨鸟
+    this.rescueUsed = false;     // 保留字段以兼容旧测试（每关救援是否已触发，依赖 Save.rescueLeft）
     this.combo = 0; this.comboTimer = 0;
     this.drag = { active: false, id: null };
     this.pointer = { x: 0, y: 0 };
@@ -324,17 +324,21 @@ class Game {
     this.fx.feathers(x, y, bird.def.body, 8);
   }
 
-  /** 泰坦巨鸟的毁灭冲击：超大范围 + 高伤害，作为"一定打得过"的保底手段 */
+  /** 泰坦巨鸟的毁灭冲击：
+   *  超大范围 + 高伤害 + 斩杀结算特效（顿帧 + 慢放 + 大字飘字 + 礼花）。
+   *  救援触发后由 afterShot() 直接调用，效果等同于"撞击即终结"。 */
   titanBlast(bird) {
     if (bird.dead) return;
     const x = bird.x, y = bird.y;
     bird.dead = true;
     if (bird.body) { bird.body.removed = true; bird.body = null; }
     this.fx.explosion(x, y, 430);
-    this.fx.flash = Math.max(this.fx.flash || 0, 0.6);
+    this.fx.flash = Math.max(this.fx.flash || 0, 0.95);   // 全屏白闪
     Sfx.explode();
+    Sfx.rescueFinish();                                   // 终结音效（与普通爆炸区分）
     this.fx.addShake(20);
-    this.fx.freeze(0.07);
+    this.fx.freeze(0.18);                                  // 顿帧
+    this.fx.slow(1.6, 0.12);                               // 慢放 1.6 秒
     this.explodeAt(x, y, 430, 3400);
     this.fx.feathers(x, y, bird.def.body, 16);
     // 全场余波：主爆炸范围外的猪也吃一发震击（900 足以秒掉含猪王在内的所有猪），
@@ -348,6 +352,15 @@ class Game {
     this.pendingBooms.push({ x: x + 70, y: y + 30, t: 0.2 });
     this.pendingBooms.push({ x: x - 70, y: y - 10, t: 0.34 });
     this.pendingBooms.push({ x: x + 10, y: y - 80, t: 0.46 });
+    // 斩杀结算特效：大字飘字 + 加大礼花（与普通爆炸区分）
+    // 位置刻意放在画面上方 1/3 处 —— 爆炸发生在鸟的位置（通常接近地面），
+    // 若文字压在爆炸上会被白闪和火光糊掉，读不出来。
+    this.fx.bigText(VW / 2, VH * 0.3, 'FINISH!', '#fff4d6', 88, '#b8500f');
+    this.fx.bigText(VW / 2, VH * 0.3 + 74, '救援成功', '#ffe5a0', 38, '#7a3008');
+    this.fx.confetti(VW / 2, 220, 90);                    // 主礼花
+    // 两侧补充小礼花，营造左右呼应
+    this.fx.confetti(VW * 0.25, 320, 36);
+    this.fx.confetti(VW * 0.75, 320, 36);
   }
 
   /** 空投白投下的炸弹：自由落体，碰到猪 / 砖块 / 地面即爆 */
@@ -663,26 +676,57 @@ class Game {
       return;
     }
     if (!this.birdQueue.length) {
-      // 救援机制：小鸟用尽但猪还在 —— 赠送一只泰坦巨鸟（每关限一次），
-      // 确保玩家不会因为差一点点就卡关重来
-      if (!this.rescueUsed) {
-        this.rescueUsed = true;
-        this.birdQueue.push('giant');
-        this.phase = 'settle';
-        this.endTimer = 0.9;
-        this.showSkillHint('🚁 救援巨鸟登场！「泰坦巨力」撞击即引发毁灭爆炸，这一击必定清场');
-        Sfx.win();
-        this.fx.confetti(SLING.x, SLING.y - 150, 42);
-        this.emitState();
+      // 救援机制：小鸟用尽但猪还在 —— 通知 UI 让用户确认是否使用救援巨鸟。
+      // 旧的「直接赠送一只」会导致玩家在不需要时也被白给 + 次数无限，违反用户预期。
+      // 新流程：UI 弹救援确认弹窗，玩家可「使用救援 / 放弃救援」二选一；
+      // 若今日次数已耗尽，UI 进一步走「清空次数 / 激活码 / 放弃」三级降级。
+      this.phase = 'rescue';        // 暂停关卡推进，等玩家决策
+      this.emitState();
+      if (this.onRescueRequest) {
+        this.onRescueRequest({
+          pigsLeft,
+          rescueLeft: Save.rescueLeft,
+          resetLeft: Save.data.rescueResets
+        });
         return;
       }
-      this.phase = 'losing'; this.endTimer = 1.1;
-      Sfx.lose();
+      // 无 UI 兜底（旧测试/无人态）：直接判负，避免卡死
+      this.phase = 'losing'; this.endTimer = 1.1; Sfx.lose();
       return;
     }
     this.phase = 'settle';
     this.endTimer = 0.55;
     this.hideSkillHint();
+  }
+
+  /** UI 端「使用救援」按钮调用：在 phase='rescue' 状态下生成一只泰坦并发射。
+   *  泰坦撞击即触发 titanBlast 的斩杀结算特效。 */
+  useRescue() {
+    if (this.phase !== 'rescue') return false;
+    if (Save.rescueLeft <= 0) return false;
+    Save.consumeRescue();
+    const giant = new Bird('giant', SLING.x, SLING.y - 14);
+    this.birds.push(giant);
+    this.currentBird = giant;
+    this.phase = 'fly';
+    this.birdQueue.length = 0;
+    this.launchCount++;
+    // 给个朝最近猪的初速，避免泰坦原地爆炸浪费救援次数
+    let vx = 700, vy = -220;
+    let target = this.pigs.find(p => !p.dead);
+    if (target) {
+      const dx = target.x - giant.x, dy = (target.y - 80) - giant.y;
+      const d = len(dx, dy) || 1;
+      const sp = Math.max(900, Math.min(1300, d * 1.7));
+      vx = dx / d * sp; vy = dy / d * sp;
+    }
+    giant.launch(vx, vy);
+    this.attachBird(giant, vx, vy);
+    this.fx.confetti(SLING.x, SLING.y - 150, 42);
+    Sfx.win();
+    this.showSkillHint('🚁 救援巨鸟登场！「泰坦巨力」撞击即引发毁灭爆炸 —— 斩——杀——！');
+    this.emitState();
+    return true;
   }
 
   resolveTurn() {

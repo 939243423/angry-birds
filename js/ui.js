@@ -36,6 +36,7 @@ const UI = {
     g.onFinish = (res) => this.showResult(res);
     g.onEggFinish = (res) => this.showEggResult(res);
     g.onEggExit = () => { this.show('screen-menu'); this.refreshMenu(); };
+    g.onRescueRequest = (info) => this.promptRescue(info);
 
     // 按钮
     $('btn-play').onclick = () => { Sfx.click(); this.startLevel(Math.min(Save.data.unlocked, LEVELS.length) - 1); };
@@ -44,10 +45,34 @@ const UI = {
     $('btn-reset').onclick = () => {
       Sfx.init(); Sfx.click();
       const total = Save.totalStars;
+      const resetsLeft = Save.data.rescueResets;
+      const rescueLeft = Save.rescueLeft;
+      // 关键约束：清空次数 = 终身额度 = 3。
+      // 若今日救援次数已耗尽 + 清空次数也已耗尽，
+      // 此时再清除存档既不能刷救援次数也无意义 —— 引导玩家走激活码申请。
+      if (rescueLeft === 0 && resetsLeft === 0) {
+        this.confirm({
+          icon: '🔑',
+          title: '清空机会已用完',
+          desc: `今日救援次数与清空机会都已耗尽。\n请前往「激活码申请」获取额外救援次数 —— 清除存档已无法刷新。`,
+          okText: '去申请激活码',
+          back: 'screen-menu',
+          onOk: () => {
+            this.promptRescue({ pigsLeft: 0, rescueLeft: 0, resetLeft: 0, forceActivate: true });
+          }
+        });
+        return;
+      }
+      // 否则正常确认清除，并明确告知：会扣 1 次清空机会（若有救援次数可借此刷新）
+      const willRefresh = rescueLeft === 0;
       this.confirm({
         icon: '🗑️',
         title: '清除所有存档？',
-        desc: `将删除全部关卡进度、${total} 颗星与金羽记录，且无法恢复。`,
+        desc:
+          `将删除全部关卡进度、${total} 颗星与金羽记录，且无法恢复。\n` +
+          (resetsLeft > 0
+            ? `将消耗 1 次「清空机会」（剩 ${resetsLeft - 1} / 3）` + (willRefresh ? '，并刷新今日救援次数为 3。' : '')
+            : `「清空机会」已耗尽，无法刷新救援次数。`),
         okText: '确认清除',
         danger: true,
         back: 'screen-menu',
@@ -55,10 +80,27 @@ const UI = {
           Save.reset();
           this.buildLevels();
           this.refreshMenu();
-          this.toast('存档已清除，进度已重置');
+          this.toast(willRefresh && resetsLeft > 0
+            ? '存档已清除，进度已重置，救援次数已刷新'
+            : '存档已清除，进度已重置');
         }
       });
     };
+    // 救援 / 激活码 弹窗按钮
+    $('btn-rescue-confirm').onclick = () => { Sfx.click(); this._rescueConfirm(); };
+    $('btn-rescue-giveup').onclick = () => { Sfx.click(); this._rescueGiveup(); };
+    $('btn-rescue-giveup2').onclick = () => { Sfx.click(); this._rescueGiveup(); };
+    $('btn-rescue-activate').onclick = () => { Sfx.click(); this._rescueActivate(); };
+    // 激活码输入即时反馈：长度到 8 自动触发激活（键盘友好）
+    $('rescue-code').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); this._rescueActivate(); }
+    });
+    $('rescue-code').addEventListener('input', (e) => {
+      e.target.value = e.target.value.toUpperCase().replace(/[^0-9A-Z]/g, '').slice(0, 8);
+    });
+    // 「用清空次数刷新救援次数」动态按钮（仅在次数已耗尽时显示）
+    const resetBtn = $('btn-rescue-reset');
+    if (resetBtn) resetBtn.onclick = () => { Sfx.click(); this._rescueUseReset(); };
     $('btn-confirm-ok').onclick = () => {
       Sfx.click();
       const cb = this._confirmCb; this._confirmCb = null;
@@ -141,7 +183,8 @@ const UI = {
   /* ---------------- 界面切换 ---------------- */
   show(id) {
     ['screen-menu', 'screen-levels', 'screen-howto', 'screen-result',
-     'screen-pause', 'screen-egg', 'screen-unlock', 'screen-confirm'].forEach(s => {
+     'screen-pause', 'screen-egg', 'screen-unlock', 'screen-confirm',
+     'screen-rescue'].forEach(s => {
       $(s).classList.add('hidden');
     });
     $('hud').classList.toggle('hidden', !(id === null && this.game.mode === 'birds'));
@@ -356,6 +399,139 @@ const UI = {
     set('menu-stars', Save.totalStars);
     set('max-stars-menu', LEVELS.length * 3);
     set('menu-feathers', Save.data.feathers);
+
+    // 救援配额展示：今日剩余 + 清空机会。0 时换红色警示
+    const rl = Save.rescueLeft;
+    const rs = Save.data.rescueResets;
+    const rlEl = $('menu-rescue-left'); if (rlEl) rlEl.textContent = rl;
+    const rsEl = $('menu-reset-left'); if (rsEl) rsEl.textContent = rs;
+    $('menu-rescue-inline') && $('menu-rescue-inline').classList.toggle('exhausted', rl === 0);
+    $('menu-reset-inline') && $('menu-reset-inline').classList.toggle('exhausted', rs === 0);
+    // 清空机会用完后，"清除存档"按钮改成去激活码申请入口
+    const resetBtn = $('btn-reset');
+    if (resetBtn) {
+      if (rs === 0 && rl === 0) {
+        resetBtn.textContent = '申请救援次数';
+      } else if (rs === 0) {
+        resetBtn.textContent = '清除存档';
+      } else {
+        resetBtn.textContent = '清除存档';
+      }
+    }
+  },
+
+  /* ---------------- 救援请求 / 激活码申请 ---------------- */
+  /** 入口：game.afterShot 检测到鸟用尽但还有猪时调用 */
+  promptRescue(info) {
+    const rescueLeft = Math.max(0, info.rescueLeft | 0);
+    const resetLeft = Math.max(0, info.resetLeft | 0);
+    const pigsLeft = info.pigsLeft | 0;
+    // 状态条永远显示当前额度（让玩家对剩余资源有数）
+    const rlEl = $('rescue-left'); if (rlEl) rlEl.textContent = rescueLeft;
+    const rsEl = $('rescue-resets'); if (rsEl) rsEl.textContent = resetLeft;
+    $('rescue-stat') && $('rescue-stat').classList.toggle('exhausted', rescueLeft === 0);
+    $('rescue-reset-stat') && $('rescue-reset-stat').classList.toggle('exhausted', resetLeft === 0);
+    // 决定走哪个模式
+    const forceActivate = !!info.forceActivate;
+    if (rescueLeft > 0 && !forceActivate) {
+      // 模式 A：还能直接用
+      $('rescue-mode-confirm').classList.remove('hidden');
+      $('rescue-mode-activate').classList.add('hidden');
+      $('rescue-desc').innerHTML =
+        `「泰坦巨力」将于本关登场 —— 撞击即引发毁灭冲击，<b>必定清场</b>。<br>` +
+        `确认使用后本关将<b>直接判胜</b>，剩余鸟不再发射。` +
+        `<br>本关剩余 <b>${pigsLeft}</b> 只猪。`;
+    } else {
+      // 模式 B：申请激活码（次数耗尽），可选清空次数刷新
+      $('rescue-mode-confirm').classList.add('hidden');
+      $('rescue-mode-activate').classList.remove('hidden');
+      const codeInput = $('rescue-code');
+      const noteInput = $('rescue-note');
+      const feedback = $('rescue-feedback');
+      if (codeInput) codeInput.value = '';
+      if (noteInput) noteInput.value = '';
+      if (feedback) { feedback.textContent = ''; feedback.className = 'rescue-hint'; }
+      const resetRow = $('btn-rescue-reset');
+      if (resetRow) resetRow.classList.toggle('hidden', resetLeft <= 0);
+      // 描述里明示当前资源
+      const intro = rescueLeft === 0
+        ? `今日救援次数 <b>已用完</b>（${0}/3），清空机会 <b>${resetLeft > 0 ? '剩 ' + resetLeft : '已耗尽'}</b>。`
+        : `当前还能用救援，但你想直接申请激活码。`;
+      const introEl = $('rescue-mode-activate').querySelector('.rescue-desc');
+      if (introEl) {
+        introEl.innerHTML =
+          intro +
+          `<br>激活码 8 位，通过校验立即获得 <b>5</b> 次救援次数。` +
+          (resetLeft > 0 ? `<br>你也可以消耗 1 次清空机会把救援次数直接刷回 3 次。` : '');
+      }
+    }
+    this._rescueCtx = { pigsLeft };
+    this.show('screen-rescue');
+    // 自动聚焦激活码输入框（仅激活码模式）
+    if (rescueLeft === 0 || forceActivate) {
+      setTimeout(() => { const ci = $('rescue-code'); if (ci) ci.focus(); }, 80);
+    }
+  },
+
+  /** 玩家点击「使用救援」 */
+  _rescueConfirm() {
+    const g = this.game;
+    if (Save.rescueLeft <= 0) {
+      this._rescueFeedback('今日救援次数已用完', 'error');
+      return;
+    }
+    // 走 game.useRescue()：内部生成泰坦、给初速、走物理循环，
+    // 泰坦撞击即触发 titanBlast 的斩杀结算特效
+    const ok = g.useRescue();
+    if (!ok) { this._rescueFeedback('当前状态下无法使用救援', 'error'); return; }
+    this.refreshMenu();
+    this.show(null);
+  },
+
+  /** 玩家点击「放弃救援」—— 直接判负 */
+  _rescueGiveup() {
+    const g = this.game;
+    this.show(null);
+    g.phase = 'losing'; g.endTimer = 1.1; Sfx.lose();
+  },
+
+  /** 玩家点击「立即激活」 */
+  _rescueActivate() {
+    const code = ($('rescue-code').value || '').trim();
+    if (!code) { this._rescueFeedback('请输入 8 位激活码', 'error'); return; }
+    const res = Save.activateRescueCode(code);
+    this._rescueFeedback(res.msg, res.ok ? 'success' : 'error');
+    if (res.ok) {
+      this.refreshMenu();
+      // 1 秒后重新弹出确认模式，让玩家再次决定是否使用救援
+      setTimeout(() => this.promptRescue({
+        pigsLeft: this._rescueCtx && this._rescueCtx.pigsLeft || 0,
+        rescueLeft: Save.rescueLeft,
+        resetLeft: Save.data.rescueResets
+      }), 900);
+    }
+  },
+
+  /** 玩家点击「用清空次数刷新救援」 */
+  _rescueUseReset() {
+    if (Save.useResetForRescue()) {
+      this._rescueFeedback('已消耗清空次数，今日救援次数刷新为 3', 'success');
+      this.refreshMenu();
+      setTimeout(() => this.promptRescue({
+        pigsLeft: this._rescueCtx && this._rescueCtx.pigsLeft || 0,
+        rescueLeft: Save.rescueLeft,
+        resetLeft: Save.data.rescueResets
+      }), 900);
+    } else {
+      this._rescueFeedback('无法使用（可能已没有清空机会或今日还有次数）', 'error');
+    }
+  },
+
+  _rescueFeedback(text, kind) {
+    const el = $('rescue-feedback');
+    if (!el) return;
+    el.textContent = text;
+    el.className = 'rescue-hint ' + (kind || '');
   },
 
   showResult(res) {

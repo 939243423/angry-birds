@@ -118,5 +118,16 @@ const Sfx = {
   lose() {[0, -3, -7, -12].forEach((s, i) => this.tone(330 * Math.pow(2, s / 12), 0.3, 'sawtooth', 0.14, null, null, i * 0.13));},
   click() { this.tone(700, 0.05, 'square', 0.1, 900); },
   pop() { this.tone(520, 0.1, 'sine', 0.18, 900); },
-  feather() {[0, 5, 9, 14, 19].forEach((s, i) => this.tone(523 * Math.pow(2, s / 12), 0.3, 'sine', 0.16, null, null, i * 0.08));}
+  feather() {[0, 5, 9, 14, 19].forEach((s, i) => this.tone(523 * Math.pow(2, s / 12), 0.3, 'sine', 0.16, null, null, i * 0.08));},
+  /** 救援巨鸟终结音效：低沉轰鸣 + 上行胜利号角，区分于普通爆炸 */
+  rescueFinish() {
+    if (!this.ready || this.muted) return;
+    // 低频轰鸣
+    this.noise(0.85, 0.42, 1100, 'lowpass', 50);
+    this.tone(70, 0.7, 'sawtooth', 0.26, 32);
+    this.tone(130, 0.42, 'square', 0.18, 48);
+    // 上行胜利号角
+    const notes = [392, 494, 587, 784];   // G4 B4 D5 G5
+    notes.forEach((f, i) => this.tone(f, 0.32, 'triangle', 0.16, null, null, 0.06 + i * 0.07));
+  }
 };

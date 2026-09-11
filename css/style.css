@@ -854,6 +854,16 @@ html, body {
 .btn-danger:hover { filter:brightness(1.05); box-shadow:0 8px 0 #9c2412, 0 16px 30px rgba(200,60,30,.46), inset 0 2px 0 rgba(255,255,255,.55); }
 .btn-danger:active { box-shadow:0 2px 0 #9c2412, 0 6px 14px rgba(200,60,30,.36), inset 0 2px 0 rgba(255,255,255,.4); }
 
+/* 「用清空次数刷新救援」用 amber 警示色，区分于 ghost（取消）与 primary（激活） */
+.btn-warning {
+  background:linear-gradient(180deg,#ffc66e,#e08a18);
+  color:#3a1f02;
+  text-shadow:0 1px 0 rgba(255,255,255,.4);
+  box-shadow:0 6px 0 #8a4a06, 0 12px 26px rgba(180,100,20,.36), inset 0 2px 0 rgba(255,255,255,.55);
+}
+.btn-warning:hover { filter:brightness(1.06); box-shadow:0 8px 0 #8a4a06, 0 16px 30px rgba(180,100,20,.44), inset 0 2px 0 rgba(255,255,255,.6); }
+.btn-warning:active { box-shadow:0 2px 0 #8a4a06, 0 6px 14px rgba(180,100,20,.3), inset 0 2px 0 rgba(255,255,255,.45); }
+
 /* ============ 静音按钮 ============ */
 .mute-btn {
   position:absolute; right:1.4%; bottom:3.2%; z-index:25;
@@ -949,8 +959,11 @@ html, body {
 
   /* 关键：全屏面板脱离 16:9 舞台改为覆盖整个视口，
      否则在竖屏下会被压进 219px 高的窄条里导致内容裁切 */
+  /* 注意：新增任何全屏 screen-* 都必须同步加进这个列表 + ui.js 的 show() 白名单，
+     漏掉的话竖屏下面板会收缩成内容高度、溢出屏幕（救援弹窗就踩过这个坑）。 */
   #screen-menu, #screen-levels, #screen-howto, #screen-result,
-  #screen-pause, #screen-egg, #screen-unlock, #screen-confirm { position:fixed; inset:0; }
+  #screen-pause, #screen-egg, #screen-unlock, #screen-confirm,
+  #screen-rescue { position:fixed; inset:0; }
   /* 注意：提示条与技能提示必须留在画面窗附近（absolute/fixed 都要按窗定位），
      之前的 position:fixed + top:17% 会把它们钉在视口顶部 —— 离画面窗十万八千里，
      所以在手机上看起来像"凭空浮着一块黑牌子"。 */
@@ -1102,6 +1115,159 @@ html, body {
 @keyframes tipFade {
   from { opacity:1; transform:translateX(-50%); }
   to   { opacity:0; transform:translateX(-50%) translateY(-8px); visibility:hidden; }
+}
+
+/* ============ 救援请求 / 激活码申请 弹窗 ============ */
+/* 救援是「真正卡关时的兜底」，不能像系统弹窗一样朴素；用金色描边 + 玻璃面板，
+   强调「最后手段」的仪式感。同时承担「激活码申请」功能。 */
+.rescue-panel {
+  border:2px solid rgba(255,196,90,.62);
+  box-shadow:0 18px 60px rgba(120,70,10,.45), inset 0 0 0 1px rgba(255,232,170,.22);
+  background:linear-gradient(180deg, rgba(255,248,228,.97), rgba(255,224,160,.95));
+  max-width:min(520px, 92vw);
+}
+.rescue-strip {
+  display:flex; gap:clamp(6px,1.2vw,12px); justify-content:center; flex-wrap:wrap;
+  padding:.55em .8em;
+  background:rgba(120,70,10,.18);
+  border-radius:var(--r-pill);
+  font-size:clamp(10px,1.45vh,15px); font-weight:800;
+  color:#5a3708; letter-spacing:.02em;
+}
+.rescue-stat { display:inline-flex; align-items:center; gap:.36em; }
+.rescue-stat b { color:#b8500f; font-size:1.18em; }
+.rescue-stat i { font-style:normal; opacity:.55; font-size:.92em; }
+.rescue-mode {
+  display:flex; flex-direction:column; align-items:center; gap:.65em;
+  width:100%; min-width:0;         /* 不归零的话 input 的固有宽度会把面板撑破 */
+  padding:clamp(4px,.7vh,12px) 0 0;
+  animation:rescueModeIn .42s var(--ease-pop);
+}
+@keyframes rescueModeIn {
+  from { opacity:0; transform:translateY(8px) scale(.96); }
+  to   { opacity:1; transform:translateY(0) scale(1); }
+}
+.rescue-ico {
+  font-size:clamp(34px,6vh,68px);
+  filter:drop-shadow(0 4px 10px rgba(150,80,10,.35));
+}
+.rescue-desc {
+  text-align:center; line-height:1.62;
+  font-size:clamp(11px,1.62vh,17px); color:#3a2408; font-weight:700;
+}
+.rescue-desc b { color:#b8500f; }
+.rescue-buttons {
+  display:flex; flex-wrap:wrap; gap:clamp(8px,1.3vw,14px); width:100%;
+  padding:clamp(6px,1.2vh,14px) 0 0;
+  border-top:1px dashed rgba(120,70,10,.32);
+  margin-top:.45em;
+}
+/* 按钮等宽；文字强制不换行、字号/内边距略收，保证「清空刷新/立即激活/放弃」
+   三个按钮在桌面面板里同行；实在放不下时 flex-wrap 会自然折行（窄屏）。 */
+.rescue-buttons .btn {
+  flex:1 1 auto; min-width:0; white-space:nowrap;
+  padding:.58em .85em;
+  font-size:clamp(11px,1.7vh,17px);
+}
+
+/* 激活码申请：表单 */
+.rescue-form { width:100%; display:flex; flex-direction:column; gap:.55em; min-width:0; }
+.rescue-label {
+  display:flex; flex-direction:column; gap:.3em;
+  min-width:0;                     /* flex item 默认 min-width:auto，不显式归零会被 input 撑破 */
+  font-size:clamp(9.5px,1.35vh,14px); font-weight:800; color:#5a3708;
+}
+/* 关键：input 作为 flex item，min-width 默认为 auto（= 内容固有宽度）。
+   这里字号 clamp(18..28px) × 默认 size=20 字符 + letter-spacing，固有宽度能到 ~570px，
+   直接把面板（540px）撑破 —— 必须 min-width:0 + width:100% 才能正常收缩。 */
+.rescue-code-input,
+.rescue-note-input {
+  min-width:0;
+  width:100%;
+  box-sizing:border-box;
+}
+.rescue-code-input {
+  font-family:'SF Mono','Consolas',ui-monospace,monospace;
+  font-size:clamp(18px,2.6vh,28px) !important; font-weight:900 !important;
+  letter-spacing:.32em; text-align:center;
+  padding:.5em .7em !important;
+  background:rgba(255,255,255,.92) !important;
+  border:2px solid rgba(180,120,40,.5) !important;
+  border-radius:10px !important;
+  text-transform:uppercase;
+  transition:border-color var(--t-mid), background var(--t-mid);
+}
+.rescue-code-input:focus {
+  outline:none; border-color:#b8500f !important; background:#fff !important;
+  box-shadow:0 0 0 3px rgba(255,180,80,.32);
+}
+.rescue-code-input::placeholder { letter-spacing:0; opacity:.55; font-weight:700; }
+.rescue-note-input {
+  font-size:clamp(10.5px,1.5vh,15px) !important;
+  padding:.4em .65em !important;
+  background:rgba(255,255,255,.88) !important;
+  border:1.5px solid rgba(180,120,40,.4) !important;
+  border-radius:10px !important;
+}
+.rescue-note-input:focus { outline:none; border-color:#b8500f !important; }
+.rescue-hint {
+  min-height:1.3em; text-align:center; font-size:clamp(10px,1.4vh,14px);
+  font-weight:700; color:#5a3708;
+  transition:color var(--t-mid);
+}
+.rescue-hint.success { color:#1a7c2c; }
+.rescue-hint.error { color:#c0341a; }
+
+/* 主菜单的状态条增加救援次数展示 */
+.menu-rescue-stat {
+  display:flex; align-items:center; justify-content:center;
+  gap:clamp(6px,1vw,12px); flex-wrap:wrap;
+  margin-top:.5em;
+}
+.rescue-inline {
+  display:inline-flex; gap:.18em; align-items:center;
+  padding:.2em .6em; border-radius:var(--r-pill);
+  background:rgba(30,20,8,.5); border:1.5px solid rgba(255,214,140,.45);
+  color:#fff6e0; font-weight:800;
+  text-shadow:0 1px 4px rgba(0,0,0,.75);
+  font-size:clamp(9.5px,1.4vh,15px);
+}
+.rescue-inline b { color:#ffd76a; font-size:1.18em; }
+/* 耗尽态：中文提示在深色天空上很容易糊掉，所以整体提亮 + 描边加强，
+   而不是简单换成饱和度低的红色 */
+.rescue-inline.exhausted {
+  background:rgba(120,30,18,.55);
+  border-color:rgba(255,150,120,.7);
+  color:#ffe2d8;
+}
+.rescue-inline.exhausted b { color:#ffb59d; }
+
+/* 竖屏收紧：救援弹窗内容比普通面板长（状态条 + 图标 + 说明 + 两个输入框 + 三按钮），
+   按桌面尺寸会顶到视口外。注意这一段必须放在所有 .rescue-* 基础规则之后，
+   否则同特异性下会被前面的规则覆盖。 */
+@media (orientation: portrait) {
+  .rescue-panel {
+    min-width:min(320px, 92vw);
+    max-width:min(420px, 94vw);
+    gap:clamp(6px,1.2vh,14px);
+    padding:calc(var(--icon, 26px) + 1.2vh) clamp(14px,4.2vw,26px) clamp(12px,2vh,22px);
+  }
+  .rescue-strip { font-size:clamp(9px,1.35vh,14px); padding:.42em .7em; gap:.5em; }
+  .rescue-mode { gap:clamp(.4em,.9vh,.6em); }
+  .rescue-ico { font-size:clamp(26px,4.6vh,46px); }
+  .rescue-panel .panel-title { font-size:clamp(17px,2.7vh,30px); padding-bottom:.22em; }
+  .rescue-desc { font-size:clamp(10.5px,1.5vh,16px); line-height:1.55; }
+  .rescue-label { font-size:clamp(9.5px,1.3vh,13px); gap:.22em; }
+  .rescue-code-input { font-size:clamp(17px,2.4vh,26px) !important; padding:.42em .6em !important; }
+  .rescue-note-input { font-size:clamp(10px,1.4vh,14px) !important; padding:.34em .55em !important; }
+  .rescue-buttons {
+    gap:clamp(6px,1.6vw,10px);
+    padding-top:clamp(5px,1vh,11px);
+  }
+  .rescue-buttons .btn {
+    font-size:clamp(10.5px,1.6vh,16px);
+    padding:.55em .6em;
+  }
 }
 
 /* ============ 动效降级（尊重系统偏好） ============ */

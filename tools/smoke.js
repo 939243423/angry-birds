@@ -224,44 +224,76 @@ console.log('— 技能与连锁 —');
 /* ---------- 4.2 救援巨鸟 / 瞄准命中 ---------- */
 console.log('— 救援机制与瞄准辅助 —');
 {
-  // 救援：小鸟用尽但猪还在 → 自动补一只泰坦巨鸟
+  // 救援触发：鸟用尽但猪还在 → 不再默给，要走 UI 确认回调
+  let rescueInfo = null;
   const g = new Game(makeEl());
+  g.onRescueRequest = (info) => { rescueInfo = info; };
   g.loadLevel(0);
   g.birdQueue.length = 0;
   g.currentBird = null;
   const pigsLeft = g.pigs.filter(p => !p.dead).length;
   g.afterShot();
-  const rescued = g.birdQueue.includes('giant') && g.rescueUsed === true;
-  console.log(`  ${rescued ? '✓' : '✗'} 鸟用尽自动补给泰坦巨鸟（剩猪 ${pigsLeft}）`);
-  if (!rescued) bad('救援巨鸟未触发');
+  const fired = g.phase === 'rescue' && rescueInfo &&
+    rescueInfo.pigsLeft === pigsLeft &&
+    rescueInfo.rescueLeft === 3 &&         // 默认每日 3 次
+    rescueInfo.resetLeft === 3;            // 默认清空 3 次
+  console.log(`  ${fired ? '✓' : '✗'} 鸟用尽触发救援回调（剩猪 ${pigsLeft}，救援 ${rescueInfo ? rescueInfo.rescueLeft : '?'}/3）`);
+  if (!fired) bad('救援未走回调路径：要么 phase 没设为 rescue，要么回调参数错误');
 
-  // 救援每关仅一次
-  g.birdQueue.length = 0;
-  g.afterShot();
-  const onceOnly = g.birdQueue.length === 0 && g.phase === 'losing';
-  console.log(`  ${onceOnly ? '✓' : '✗'} 救援每关仅一次（再次用尽直接判负）`);
-  if (!onceOnly) bad('救援可被重复触发');
+  // UI 走完「使用救援」流程：game.useRescue() 后泰坦应发射并被记录
+  const beforeRescue = Save.rescueLeft;
+  g.useRescue();
+  const titanExists = g.birds.some(b => b.type === 'giant') && g.phase === 'fly';
+  const countConsumed = Save.rescueLeft === beforeRescue - 1;
+  console.log(`  ${titanExists && countConsumed ? '✓' : '✗'} useRescue：泰坦已上场=${titanExists} 救援次数 ${beforeRescue} → ${Save.rescueLeft}`);
+  if (!titanExists) bad('game.useRescue() 没有生成泰坦并切换 phase');
+  if (!countConsumed) bad('useRescue 没有扣救援次数');
 
-  // 泰坦引爆：保底清场能力
+  // 救援次数耗尽时回调应带上 resetLeft = 实际剩余
+  Save.data.rescueCount = 3; Save.save();                // 今日次数耗尽
+  Save.data.rescueResets = 1; Save.save();               // 剩 1 次清空
   const g2 = new Game(makeEl());
-  g2.loadLevel(7);
+  let info2 = null;
+  g2.onRescueRequest = (info) => { info2 = info; };
+  g2.loadLevel(0);
+  g2.birdQueue.length = 0;
+  g2.currentBird = null;
+  g2.afterShot();
+  const exhausted = info2 && info2.rescueLeft === 0 && info2.resetLeft === 1;
+  console.log(`  ${exhausted ? '✓' : '✗'} 次数耗尽时回调参数：rescueLeft=${info2 ? info2.rescueLeft : '?'} resetLeft=${info2 ? info2.resetLeft : '?'}`);
+  if (!exhausted) bad('次数耗尽时回调应明确告知剩余清空机会');
+
+  // 泰坦引爆：保底清场 + 斩杀结算特效（顿帧 + 慢放 + 全屏白闪 + 大字飘字）
+  const g3 = new Game(makeEl());
+  g3.loadLevel(7);
   const tb = new Bird('giant', 1150, 620);
-  g2.birds.push(tb); g2.currentBird = tb;
-  const p0 = g2.pigs.filter(p => !p.dead).length;
-  g2.titanBlast(tb);
-  for (let s = 0; s < 360; s++) { g2.stepPhysics(1 / 120); g2.updateGameplay(1 / 120, 1 / 120); }
-  const p1 = g2.pigs.filter(p => !p.dead).length;
+  g3.birds.push(tb); g3.currentBird = tb;
+  const p0 = g3.pigs.filter(p => !p.dead).length;
+  g3.particles.clear();                          // 干净起点才能精确统计大数字粒子
+  g3.titanBlast(tb);
+  const flashOk = g3.fx.flash >= 0.9;
+  const slowOk = g3.fx.timeScale <= 0.2 || g3.fx.slowTimer > 0;
+  const freezeOk = g3.fx.hitStop > 0;
+  const bigText = g3.particles.list.filter(p => p.type === 'bigtext');
+  for (let s = 0; s < 360; s++) { g3.stepPhysics(1 / 120); g3.updateGameplay(1 / 120, 1 / 120); }
+  const p1 = g3.pigs.filter(p => !p.dead).length;
   const titanOk = p1 < p0;
-  console.log(`  ${titanOk ? '✓' : '✗'} 泰坦毁灭冲击：剩猪 ${p0} → ${p1}`);
+  const finLabels = bigText.map(p => p.text).join('|');
+  const finOk = bigText.length >= 2 && /FINISH/.test(finLabels) && /救援成功/.test(finLabels);
+  console.log(`  ${titanOk && flashOk && slowOk && freezeOk && finOk ? '✓' : '✗'} 泰坦斩杀：剩猪 ${p0} → ${p1}，白闪=${flashOk} 慢放=${slowOk} 顿帧=${freezeOk} 大字 "${finLabels}"`);
   if (!titanOk) bad('泰坦爆炸未造成伤害');
+  if (!flashOk) bad('泰坦斩杀特效：全屏白闪未触发（fx.flash < 0.9）');
+  if (!slowOk) bad('泰坦斩杀特效：时间慢放未触发（fx.timeScale 没掉到 0.2 以下）');
+  if (!freezeOk) bad('泰坦斩杀特效：顿帧未触发（fx.hitStop）');
+  if (!finOk) bad('泰坦斩杀特效：大字飘字缺失或文案错：' + finLabels);
 
   // 瞄准预测：轨迹足够长，且能给出命中点
-  const g3 = new Game(makeEl());
-  g3.loadLevel(0);
-  g3.updateAimPreview(1150, -780);
-  const longEnough = g3.aimPoints.length > 8;
-  const hasHit = !!g3.aimHit;
-  console.log(`  ${longEnough && hasHit ? '✓' : '✗'} 轨迹预测：采样 ${g3.aimPoints.length} 点，命中点 ${g3.aimHit ? g3.aimHit.kind : '无'}`);
+  const g4 = new Game(makeEl());
+  g4.loadLevel(0);
+  g4.updateAimPreview(1150, -780);
+  const longEnough = g4.aimPoints.length > 8;
+  const hasHit = !!g4.aimHit;
+  console.log(`  ${longEnough && hasHit ? '✓' : '✗'} 轨迹预测：采样 ${g4.aimPoints.length} 点，命中点 ${g4.aimHit ? g4.aimHit.kind : '无'}`);
   if (!longEnough) bad('瞄准轨迹过短');
   if (!hasHit) bad('瞄准轨迹未给出命中点');
 
@@ -269,8 +301,8 @@ console.log('— 救援机制与瞄准辅助 —');
   let pigAngle = null;
   for (let a = 4; a <= 82; a += 2) {
     const th = a * Math.PI / 180;
-    g3.updateAimPreview(Math.cos(th) * 1250, -Math.sin(th) * 1250);
-    if (g3.aimHit && g3.aimHit.kind === 'pig') { pigAngle = a; break; }
+    g4.updateAimPreview(Math.cos(th) * 1250, -Math.sin(th) * 1250);
+    if (g4.aimHit && g4.aimHit.kind === 'pig') { pigAngle = a; break; }
   }
   console.log(`  ${pigAngle !== null ? '✓' : '✗'} 存在可命中猪的瞄准角${pigAngle !== null ? `（${pigAngle}°）` : ''}`);
   if (pigAngle === null) bad('没有任何角度能命中猪，轨迹停止逻辑可能有误');
@@ -279,14 +311,14 @@ console.log('— 救援机制与瞄准辅助 —');
   // 曾经这里传的是拉杆位移本身（约 98px/s 而不是 98×SLING_POWER），
   // 被重力一拽就变成一条直插地面的短线 —— 上面两处断言因为直接传速度所以全都测不到。
   {
-    const g4 = new Game(makeEl());
-    g4.loadLevel(0);
+    const g5 = new Game(makeEl());
+    g5.loadLevel(0);
     const pull = { x: -60, y: 66 };                     // 往左下拽 → 朝右上发射
-    const v = g4.pullToVelocity(pull.x, pull.y);
+    const v = g5.pullToVelocity(pull.x, pull.y);
     const want = len(pull.x, pull.y) * SLING_POWER;
     const speedOk = Math.abs(len(v.vx, v.vy) - want) < 1e-6;
-    g4.updateAimPreview(v.vx, v.vy);
-    const pts = g4.aimPoints, n = pts.length;
+    g5.updateAimPreview(v.vx, v.vy);
+    const pts = g5.aimPoints, n = pts.length;
     const longEnough = n > 10;
     const rises = n > 3 && pts[Math.floor(n * 0.3)].y < pts[0].y - 40;   // 中段在爬升 = 抛物线
     const reachOk = n > 0 && pts[n - 1].x > 700;
@@ -296,6 +328,106 @@ console.log('— 救援机制与瞄准辅助 —');
     if (!rises) bad('真实拖拽下轨迹不是抛物线');
     if (!reachOk) bad('真实拖拽下轨迹打不到远处');
   }
+
+  // 重置 Save 以免影响后续断言
+  Save.reset();
+}
+
+/* ---------- 4.3 救援配额：每日次数 / 清空机会 / 激活码 ---------- */
+console.log('— 救援配额（每日次数 / 清空机会 / 激活码） —');
+{
+  Save.reset();
+  const initial = {
+    rescueLeft: Save.rescueLeft,
+    resetLeft: Save.data.rescueResets,
+    activated: Save.data.rescueActivated
+  };
+  const defaultOk = initial.rescueLeft === 3 && initial.resetLeft === 3 && initial.activated === 0;
+  console.log(`  ${defaultOk ? '✓' : '✗'} 默认配额：救援 ${initial.rescueLeft}/3，清空 ${initial.resetLeft}/3，已激活 ${initial.activated}`);
+  if (!defaultOk) bad('新存档默认救援次数应为 3/3，清空机会 3/3，激活次数 0');
+
+  // 消耗救援次数
+  Save.consumeRescue(); Save.consumeRescue();
+  const after2 = Save.rescueLeft;
+  console.log(`  ${after2 === 1 ? '✓' : '✗'} 消耗 2 次救援后剩 ${after2}/3`);
+  if (after2 !== 1) bad('消耗救援次数后剩余值错误');
+
+  // 救援次数耗尽后清空机会可刷新
+  Save.consumeRescue();                                // 0/3
+  const beforeReset = Save.useResetForRescue();
+  const afterReset = Save.rescueLeft;
+  const resetUsed = Save.data.rescueResets === 2;
+  console.log(`  ${beforeReset && afterReset === 3 && resetUsed ? '✓' : '✗'} 清空机会刷新救援：成功=${beforeReset} 救援次数 → ${afterReset}，清空次数 → ${Save.data.rescueResets}/3`);
+  if (!beforeReset) bad('useResetForRescue 在次数耗尽时返回 false');
+  if (afterReset !== 3) bad('清空后救援次数应回到 3');
+  if (!resetUsed) bad('使用清空机会后剩余次数应减 1');
+
+  // 还有救援次数时不应允许用清空机会
+  const refused = Save.useResetForRescue();
+  console.log(`  ${!refused ? '✓' : '✗'} 救援还有次数时拒绝消耗清空机会=${!refused}`);
+  if (refused) bad('还有救援次数时不应允许消耗清空机会');
+
+  // 激活码：合法码 + 校验位匹配
+  const good = Save.activateRescueCode('DEMORESE');
+  console.log(`  ${good.ok && good.added === 5 ? '✓' : '✗'} 合法激活码 DEMORESE：ok=${good.ok} added=${good.added} msg=${JSON.stringify(good.msg)}`);
+  if (!good.ok) bad('合法激活码 DEMORESE 应通过');
+
+  // 激活码：长度错
+  const short = Save.activateRescueCode('SHORT');
+  console.log(`  ${!short.ok ? '✓' : '✗'} 长度过短拒绝：${JSON.stringify(short.msg)}`);
+  if (short.ok) bad('长度错的激活码应被拒绝');
+
+  // 激活码：校验位错
+  const badCode = Save.activateRescueCode('XXXXXXXX');
+  console.log(`  ${!badCode.ok ? '✓' : '✗'} 校验位错拒绝：${JSON.stringify(badCode.msg)}`);
+  if (badCode.ok) bad('校验位错误的激活码应被拒绝');
+
+  // 激活码：纯小写应被自动归一为大写
+  const lower = Save.activateRescueCode('demorese');
+  console.log(`  ${lower.ok ? '✓' : '✗'} 小写激活码自动归一化：${JSON.stringify(lower.msg)}`);
+  if (!lower.ok) bad('小写激活码应自动归一为大写并通过');
+
+  // 激活码：今日耗尽时激活 → credit 增加 → 今日 left = credit
+  Save.reset();
+  Save.data.rescueCount = 3; Save.save();             // 今日已用 3 次
+  const r = Save.activateRescueCode('DEMORESE');
+  const leftNow = Save.rescueLeft;
+  console.log(`  ${r.ok && r.added === 5 && leftNow === 5 && Save.data.rescueCredit === 5 ? '✓' : '✗'} 今日耗尽激活：left=${leftNow}（count=${Save.data.rescueCount} credit=${Save.data.rescueCredit}）`);
+  if (!r.ok || r.added !== 5 || leftNow !== 5 || Save.data.rescueCredit !== 5) bad('激活码应在今日耗尽时把 credit 加 5，今日 left=5');
+
+  // credit 跨日不重置 + 与今日配额叠加（跨日同时恢复今日 3 次额度）
+  const origToday2 = Save._todayKey;
+  Save._todayKey = () => origToday2() + 1;
+  const afterDay = Save.rescueLeft;
+  Save._todayKey = origToday2;
+  console.log(`  ${afterDay === 8 ? '✓' : '✗'} 跨日恢复：left=${afterDay}（今日 3 + credit 5 = 8）`);
+  if (afterDay !== 8) bad('跨日应恢复今日 3 次额度 + 保留 credit 5，总 left=8');
+
+  // 消耗时优先扣今日次数、再扣 credit
+  Save.reset();
+  Save.data.rescueCredit = 3; Save.save();           // 假设之前激活过一次
+  Save.consumeRescue();
+  const c1 = Save.data.rescueCount, cr1 = Save.data.rescueCredit;
+  console.log(`  ${c1 === 1 && cr1 === 3 ? '✓' : '✗'} 优先扣今日：消耗 1 次 → count=${c1} credit=${cr1}（今日还能用 2 次 + credit 3）`);
+  if (c1 !== 1 || cr1 !== 3) bad('今日有配额时应优先扣今日，credit 不动');
+
+  // 今日用完后继续消耗 → 扣 credit
+  Save.data.rescueCount = 3; Save.save();
+  Save.consumeRescue();
+  const c2 = Save.data.rescueCount, cr2 = Save.data.rescueCredit;
+  console.log(`  ${c2 === 3 && cr2 === 2 ? '✓' : '✗'} 今日耗尽扣 credit：消耗 → count=${c2} credit=${cr2}`);
+  if (c2 !== 3 || cr2 !== 2) bad('今日已满时应转扣 credit');
+
+  // 清空次数耗尽时无法再用
+  Save.reset();
+
+  // window.genRescueCode 必须存在并能生成可校验的码
+  const sample = window.genRescueCode('SAMPLE1');
+  console.log(`  ${typeof sample === 'string' && sample.length === 8 && Save._checkRescueCode(sample) ? '✓' : '✗'} genRescueCode('SAMPLE1') = ${sample}`);
+  if (typeof sample !== 'string' || sample.length !== 8) bad('genRescueCode 未返回 8 位字符串');
+  if (!Save._checkRescueCode(sample)) bad('genRescueCode 生成的码校验失败');
+
+  Save.reset();
 }
 
 /* ---------- 4.5 自动通关模拟（解析弹道 + 贪心瞄准） ---------- */
