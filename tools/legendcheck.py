@@ -1,9 +1,9 @@
-"""图鉴 → 测试关卡 跳转链路验证。
+"""图鉴 → 测试关卡 跳转链路验证（当前页跳转版）。
 
 验证：
 1. 主菜单图鉴卡片可点击、有 role=button、有 aria-label
-2. 点击后 window.open 被调用，URL 形如 index.html?level=10&bird=<type>
-3. 真实打开该 URL，进入测试关（L_TEST）且 currentBird 为指定鸟种、卡片高亮
+2. 点击后**不开新标签**，当前页直接进入测试关（L_TEST），currentBird 为指定鸟种、卡片高亮
+3. URL 直达 index.html?level=10&bird=<type> 仍向后兼容
 4. 测试关不污染 Save（levels[10] 不存在、unlocked 不变）
 5. 9 只鸟固定顺序循环（弹弓后队列顺序正确）
 
@@ -75,23 +75,26 @@ def main() -> int:
                 for c in cards[:3]:
                     print('     ', c)
 
-            # 拦截 window.open，点第 4 张卡片（黑鸟）
-            page.evaluate("""() => {
-                window.__opened = [];
-                window.open = (u, t) => { window.__opened.push([u, t]); return null; };
-            }""")
+            # 点击第 4 张卡片 → 不开新标签，直接在当前页进入测试关
             page.click('.legend-card:nth-child(4)')
-            page.wait_for_timeout(150)
-            opened = page.evaluate("() => window.__opened")
-            print(f'  点击第 4 张卡片 → window.open 调用: {opened}')
-            # 期望 URL = index.html?level=10&bird=black（新约定）
-            ok3 = bool(opened) and 'level=10' in opened[0][0] and 'bird=black' in opened[0][0] \
-                  and opened[0][1] == '_blank'
-            print(f'  {"✓" if ok3 else "✗"} 打开 index.html?level=10&bird=black（新标签页）')
+            page.wait_for_timeout(400)
+            after_click = page.evaluate("""() => ({
+                opened: window.__opened || [],
+                isTest: window.__game && window.__game.isTestLevel,
+                currentType: window.__game && window.__game.currentBird && window.__game.currentBird.type,
+                levelName: window.__game && window.__game.level && window.__game.level.name,
+                queue: window.__game ? window.__game.birdQueue.slice() : null,
+                queueLen: window.__game ? window.__game.birdQueue.length : 0,
+            })""")
+            print(f'  点击第 4 张卡片 → 当前页进入测试关: opened={after_click["opened"]}')
+            # 期望：不开新标签（opened 为空）+ isTestLevel=true + currentBird=black + 队列首位=black
+            ok3 = (not after_click['opened']) and after_click['isTest'] is True \
+                  and after_click['currentType'] == 'black' and after_click['levelName'] == '技能测试关'
+            print(f'  {"✓" if ok3 else "✗"} 当前页直接进入测试关，不开新标签，currentBird=black')
             if not ok3:
                 bad += 1
 
-            # 真实打开该 URL，确认进入测试关、选中黑鸟
+            # 额外验证：URL 直达 ?level=10&bird=black 也能进测试关（向后兼容）
             page.goto(f'{base}/index.html?level=10&bird=black', wait_until='load')
             page.wait_for_timeout(500)
             info = page.evaluate("""() => ({
@@ -102,10 +105,10 @@ def main() -> int:
                 queue: window.__game.birdQueue.slice(),
                 queueLen: window.__game.birdQueue.length,
             })""")
-            print(f'  进入测试关: {info}')
+            print(f'  URL 直达 ?level=10&bird=black: {info}')
             ok4 = info['isTest'] is True and info['levelIdx'] == 10 \
                   and info['levelName'] == '技能测试关' and info['currentType'] == 'black'
-            print(f'  {"✓" if ok4 else "✗"} isTestLevel=true, levelIdx=10, currentBird=black')
+            print(f'  {"✓" if ok4 else "✗"} URL 直达也能进测试关，levelIdx=10, currentBird=black')
             if not ok4:
                 bad += 1
 
@@ -155,7 +158,7 @@ def main() -> int:
     if bad:
         print(f'\n✗ {bad} 项未通过')
         return 1
-    print('\n✅ 图鉴卡片可点击 → 新标签打开测试关并自动选中该鸟')
+    print('\n✅ 图鉴卡片可点击 → 当前页进入测试关并自动选中该鸟，URL 直达仍向后兼容')
     return 0
 
 

@@ -475,7 +475,7 @@ buildLegend() {
       for (const k in BIRD_TYPES) {
         const d = BIRD_TYPES[k];
         const card = document.createElement('div');
-        // 可点击 → 跳到技能测试关卡并直接选中该鸟
+        // 可点击 → 当前页直接进入测试关卡并选中该鸟（不再开新标签）
         card.className = 'legend-card' + (d.rescue ? ' rescue' : '');
         card.setAttribute('role', 'button');
         card.tabIndex = 0;
@@ -483,34 +483,33 @@ buildLegend() {
         card.setAttribute('aria-label', `${d.name} ${d.skill}，点击前往技能测试关实测`);
         const go = () => {
           Sfx.click();
-          // ?level=TEST_LEVEL_INDEX 是约定的测试关入口（图鉴专用）
-          const target = `index.html?level=${TEST_LEVEL_INDEX}&bird=${encodeURIComponent(k)}`;
-          window.open(target, '_blank');
+          // 当前页直接进测试关 —— 玩家想回去就暂停→主菜单
+          this.startTestLevel(k);
         };
         card.onclick = go;
         card.onkeydown = (e) => {
           if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); }
         };
-      const cv = document.createElement('canvas');
-      cv.width = 132; cv.height = 132;      // 2x 分辨率，窄屏下也清晰
-      cv.className = 'legend-canvas';
-      const info = document.createElement('div');
-      info.className = 'legend-info';
-      const nm = document.createElement('b');
-      nm.className = 'legend-name';
-      nm.textContent = d.name;
-      const sk = document.createElement('span');
-      sk.className = 'legend-skill';
-      sk.textContent = d.rescue ? `救援 · ${d.skill}` : d.skill;
-      const hint = document.createElement('span');
-      hint.className = 'legend-goto';
-      hint.textContent = '实地试技能 ↗';
-      info.appendChild(nm); info.appendChild(sk); info.appendChild(hint);
-      card.appendChild(cv); card.appendChild(info);
-      el.appendChild(card);
-      this.drawLegendBird(cv, d);
-    }
-  },
+        const cv = document.createElement('canvas');
+        cv.width = 132; cv.height = 132;      // 2x 分辨率，窄屏下也清晰
+        cv.className = 'legend-canvas';
+        const info = document.createElement('div');
+        info.className = 'legend-info';
+        const nm = document.createElement('b');
+        nm.className = 'legend-name';
+        nm.textContent = d.name;
+        const sk = document.createElement('span');
+        sk.className = 'legend-skill';
+        sk.textContent = d.rescue ? `救援 · ${d.skill}` : d.skill;
+        const hint = document.createElement('span');
+        hint.className = 'legend-goto';
+        hint.textContent = '进入测试关 →';
+        info.appendChild(nm); info.appendChild(sk); info.appendChild(hint);
+        card.appendChild(cv); card.appendChild(info);
+        el.appendChild(card);
+        this.drawLegendBird(cv, d);
+      }
+    },
 
   /** 在图鉴小画布上绘制该小鸟的立绘（复用游戏内的绘制函数，保证风格一致） */
   drawLegendBird(cv, def) {
