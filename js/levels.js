@@ -30,8 +30,11 @@ const pigOn = (topY, type) => ({ type, x: 0, y: topY - PIG_TYPES[type].r });
  * 1 星门槛必须 **低于「最低通关分」**（= 全场猪分 + 全部砖块分，即用尽所有鸟才通关也能拿到的分数）。
  * 否则会出现"打通了却是 0 星"的挫败感 —— L1 就踩过：最低通关 9500 而门槛设成 13000。
  * 分数公式见 game.js finishLevel()：猪分 + 砖块分 + 剩余小鸟 ×10000。
- * 各关最低通关分：L1 9500 / L2 16000 / L3 16500 / L4 20400 / L5 18800
- *                L6 26000 / L7 22350 / L8 43000 / L9 24200 / L10 30900
+ * 分值表见 entities.js：猪 small3000 / normal5000 / helmet7000 / king12000；
+ *                      砖 wood500 / stone700 / ice400 / glass450 / tnt1500
+ * 各关最低通关分（改关卡结构后**必须**用 tools/levelcheck.py 重新核对）：
+ *   L1 9500 / L2 16000 / L3 16500 / L4 22400 / L5 18800
+ *   L6 26000 / L7 22350 / L8 43000 / L9 24200 / L10 30900
  */
 
 function L1() {
@@ -80,14 +83,16 @@ function L4() {
   const w1 = stack(B, 1180, [['wood', 32, 160], ['wood', 32, 90]]);
   const t1 = stack(B, 1300, [['stone', 46, 46], ['stone', 46, 46], ['stone', 46, 46], ['stone', 46, 46]]);
   const t2 = beam(B, 'wood', 1300, t1, 170, 26);
-  P.push({ type: 'normal', x: 1286, y: t2 - 26 });
+  // 戴钢盔猪首次登场：站在 4 层石塔顶的横梁上 —— 正常平射够不到它，
+  // 必须借助左侧弹簧板弹高、从上方砸落才能造成足够伤害（对应本关主题）
+  P.push({ type: 'helmet', x: 1286, y: t2 - 28 });
   P.push({ type: 'small', x: 1352, y: t2 - 19 });
   const t3 = stack(B, 1470, [['stone', 44, 44], ['stone', 44, 44], ['stone', 44, 44]]);
   P.push({ type: 'small', x: 1470, y: t3 - 19 });
   P.push({ type: 'small', x: 1240, y: GROUND_Y - 19 });
   return {
-    name: '弹簧蹦床', tip: '踩上弹簧板可以高高弹起', decor: 'day', wind: 0,
-    birds: ['red', 'blue', 'yellow', 'red'], stars: [18000, 32000, 40000],
+    name: '弹簧蹦床', tip: '踩上弹簧板可以高高弹起，从上方砸穿钢盔猪', decor: 'day', wind: 0,
+    birds: ['red', 'blue', 'yellow', 'red'], stars: [19000, 35000, 44000],
     blocks: B, pigs: P, springs: [[1050, GROUND_Y - 10, 'up']]
   };
 }
