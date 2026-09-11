@@ -105,6 +105,34 @@ class World {
         if (b.sleepTimer > 0.32) { b.sleeping = true; b.vx = 0; b.vy = 0; b.angVel = 0; b.angle = lerp(b.angle, 0, 0.35); }
       } else b.sleepTimer = 0;
     }
+
+    // 失去支撑则下落：sleeping body 若脚下不再有任何支撑（地面 / 其它 body），
+    // 立即唤醒让其受重力下落 —— 否则会出现「下面柱子被打没，上面仍浮空」的诡异状态。
+    // 经典 Angry Birds 物理就这样：上层物体靠「恰好坐」在支撑上静止，支撑一消失就该落。
+    // 注：放在睡眠判定之后，这样刚被判定为 sleeping 的也能在下一拍就被识别/唤醒。
+    for (const b of this.bodies) {
+      if (b.removed || b.static || !b.sleeping) continue;
+      const bottom = b.isCircle ? b.y + b.r : b.y + b.hh;
+      // 地面本身算支撑（避免贴着地的物体被无辜唤醒）
+      if (bottom >= GROUND_Y - 1) continue;
+      let supported = false;
+      for (const o of this.bodies) {
+        if (o === b || o.removed) continue;
+        const oTop = o.isCircle ? o.y - o.r : o.y - o.hh;
+        // 邻居的顶部不能高过自己的身体（必须在自己脚下）
+        if (oTop > bottom - 0.5) continue;
+        // 距离也不能太远（被探测物最多在自己「身高」之内）
+        const myReach = b.isCircle ? b.r + 6 : b.hh + 6;
+        if (bottom - oTop > myReach * 2) continue;
+        // 水平方向必须有重叠（AABB 近似）
+        const myHalf = b.isCircle ? b.r : b.hw;
+        const oHalf = o.isCircle ? o.r : o.hw;
+        if (Math.abs(o.x - b.x) > myHalf + oHalf + 4) continue;
+        supported = true;
+        break;
+      }
+      if (!supported) b.wake();
+    }
   }
 
   solveGround(last) {

@@ -241,6 +241,13 @@ class Game {
   }
 
   launch(bird, vx, vy) {
+    // 关键：实际发射起点必须和瞄准预览起点完全一致。
+    // 预览从 (SLING.x, SLING.y - 14) 开始做前向积分；
+    // 若 attachBird 用「拉弓时的鸟位」作为刚体初值，鸟在第一帧就会先"拖着"拉杆位移才被加速，
+    // 最终落点和瞄准线之间出现几十到一百多像素的偏差，看起来"瞄得中却偏低一点点"。
+    // 修复：发射瞬间把鸟吸回弹弓叉口，刚体从这里出发并立刻被赋予 (vx, vy)。
+    bird.x = SLING.x;
+    bird.y = SLING.y - 14;
     bird.launch(vx, vy);
     this.attachBird(bird, vx, vy);
     this.phase = 'fly';
@@ -699,8 +706,12 @@ class Game {
     this.hideSkillHint();
   }
 
-  /** UI 端「使用救援」按钮调用：在 phase='rescue' 状态下生成一只泰坦并发射。
-   *  泰坦撞击即触发 titanBlast 的斩杀结算特效。 */
+  /** UI 端「使用救援」按钮调用：消耗 1 次救援配额，把「泰坦巨力」挂上弹弓，
+   *  让玩家自己拉弓发射。后续流程与普通小鸟一致 —— 玩家正常拖动 → 松手发射 →
+   *  物理飞行中接近任意猪 / 飞行超 2.4s 时由 titanBlast 兜底清场，触发斩杀结算特效。
+   *  旧版本在这里直接给泰坦一个朝最近猪的初速让弹自动飞，缺点有二：
+   *    1) 玩家没有「亲手发射」的动作参与感
+   *    2) 飞行 + 引爆 + winning 共不到 1 秒就被 showResult 面板盖过，斩杀特效基本看不到 */
   useRescue() {
     if (this.phase !== 'rescue') return false;
     if (Save.rescueLeft <= 0) return false;
@@ -708,24 +719,11 @@ class Game {
     const giant = new Bird('giant', SLING.x, SLING.y - 14);
     this.birds.push(giant);
     this.currentBird = giant;
-    this.phase = 'fly';
-    this.birdQueue.length = 0;
-    this.launchCount++;
-    // 给个朝最近猪的初速，避免泰坦原地爆炸浪费救援次数
-    let vx = 700, vy = -220;
-    let target = this.pigs.find(p => !p.dead);
-    if (target) {
-      const dx = target.x - giant.x, dy = (target.y - 80) - giant.y;
-      const d = len(dx, dy) || 1;
-      const sp = Math.max(900, Math.min(1300, d * 1.7));
-      vx = dx / d * sp; vy = dy / d * sp;
-    }
-    giant.launch(vx, vy);
-    this.attachBird(giant, vx, vy);
-    this.fx.confetti(SLING.x, SLING.y - 150, 42);
-    Sfx.win();
-    this.showSkillHint('🚁 救援巨鸟登场！「泰坦巨力」撞击即引发毁灭爆炸 —— 斩——杀——！');
+    this.phase = 'aim';                          // 让玩家正常拉弓，不再自动发射
+    this.birdQueue.length = 0;                   // 救援后只剩泰坦一只
     this.emitState();
+    // 引导玩家「向猪的方向拉弓」，并预告斩杀效果，让玩家有目标感
+    this.showSkillHint('🛡️ 救援巨鸟「泰坦」已就位 —— 请向猪的方向拉弓发射，撞击即引发毁灭爆炸！');
     return true;
   }
 

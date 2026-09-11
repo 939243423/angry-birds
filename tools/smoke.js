@@ -240,14 +240,42 @@ console.log('— 救援机制与瞄准辅助 —');
   console.log(`  ${fired ? '✓' : '✗'} 鸟用尽触发救援回调（剩猪 ${pigsLeft}，救援 ${rescueInfo ? rescueInfo.rescueLeft : '?'}/3）`);
   if (!fired) bad('救援未走回调路径：要么 phase 没设为 rescue，要么回调参数错误');
 
-  // UI 走完「使用救援」流程：game.useRescue() 后泰坦应发射并被记录
+  // UI 走完「使用救援」流程：game.useRescue() 应把泰坦挂上弹弓（phase='aim'），
+  // 玩家接下来自己拉弓发射。绝不能再自动 launch —— 否则玩家没参与感、且斩杀特效被盖。
   const beforeRescue = Save.rescueLeft;
   g.useRescue();
-  const titanExists = g.birds.some(b => b.type === 'giant') && g.phase === 'fly';
+  const giant = g.birds.find(b => b.type === 'giant');
+  const onSlingshot = giant && Math.abs(giant.x - SLING.x) < 1 && Math.abs(giant.y - (SLING.y - 14)) < 1;
+  const awaitingAim = g.phase === 'aim' && g.currentBird === giant;
+  const notAutoFired = !giant || giant.state === 'ready';     // 没被 .launch()
   const countConsumed = Save.rescueLeft === beforeRescue - 1;
-  console.log(`  ${titanExists && countConsumed ? '✓' : '✗'} useRescue：泰坦已上场=${titanExists} 救援次数 ${beforeRescue} → ${Save.rescueLeft}`);
-  if (!titanExists) bad('game.useRescue() 没有生成泰坦并切换 phase');
+  const ok = !!giant && onSlingshot && awaitingAim && notAutoFired && countConsumed;
+  console.log(`  ${ok ? '✓' : '✗'} useRescue：泰坦挂弹弓=${!!giant}（位置${giant ? `(${giant.x.toFixed(0)},${giant.y.toFixed(0)})` : '-'}）phase=aim=${g.phase === 'aim'} 未自动发射=${notAutoFired}，救援次数 ${beforeRescue} → ${Save.rescueLeft}`);
+  if (!giant) bad('game.useRescue() 没有生成泰坦');
+  else if (!onSlingshot) bad('泰坦没有挂在弹弓叉口');
+  else if (g.phase !== 'aim') bad('useRescue 不应自动切到 phase=fly，必须等玩家拉弓');
+  else if (!notAutoFired) bad('useRescue 自动发射了泰坦，玩家没有拉弓机会');
   if (!countConsumed) bad('useRescue 没有扣救援次数');
+
+  // 玩家拉弓发射 → 泰坦物理飞行 → 接近猪自动引爆 → 斩杀特效 → 关卡胜利。
+  // 这里直接给泰坦一个朝最近猪的初速模拟「拉弓松手」，验证整条链路通畅。
+  // 关键：循环必须等到 phase 切到 winning / win / lose —— 即便 giant 已死，
+  // 也要让 settleTimer 累到 0.85s 触发 afterShot，再让 winning 1.25s 计时走完。
+  if (giant && g.pigs.some(p => !p.dead)) {
+    const nearest = g.pigs.find(p => !p.dead);
+    const dx = nearest.x - giant.x, dy = (nearest.y - 80) - giant.y;
+    const d = len(dx, dy) || 1;
+    g.launch(giant, dx / d * 1100, dy / d * 1100);
+    let frames = 0;
+    while (!['winning', 'win', 'lose'].includes(g.phase) && frames++ < 1200) {
+      g.update(1 / 120);
+    }
+    const won = g.phase === 'winning' || g.phase === 'win';
+    const seeFinish = g.particles.list.some(p => p.type === 'bigtext' && p.text === 'FINISH!');
+    console.log(`  ${won && seeFinish ? '✓' : '✗'} 救援发射链路：phase 落到 ${g.phase}，大字 FINISH! ${seeFinish ? '已播' : '未播'}，剩猪 ${g.pigs.filter(p => !p.dead).length}`);
+    if (!won) bad('救援发射后未走到 winning / win');
+    if (!seeFinish) bad('救援发射后 titanBlast 没有把「FINISH!」大字粒子推入队列');
+  }
 
   // 救援次数耗尽时回调应带上 resetLeft = 实际剩余
   Save.data.rescueCount = 3; Save.save();                // 今日次数耗尽
@@ -330,6 +358,52 @@ console.log('— 救援机制与瞄准辅助 —');
   }
 
   // 重置 Save 以免影响后续断言
+  Save.reset();
+}
+
+/* ---------- 4.4 物理：失去支撑则下落 ---------- */
+console.log('— 物理：失去支撑则下落 —');
+{
+  // 经典「下层柱子 + 上层木块」场景：
+  // 1) 先把上层 settle 到下层顶部、让其进入 sleeping
+  // 2) 拆除下层支撑后，跑物理看上层是否能被自动唤醒并落到地面
+  // 旧实现中 sleeping body 一旦失去支撑会"浮空"，与真实物理严重不符。
+  const g = new Game(makeEl());
+  g.loadLevel(0);
+  g.birdQueue.length = 0; g.currentBird = null;
+  // 下层（static，作为稳定支撑）：y=770, h=80 → 上端 730，下端 810 紧贴地面（GROUND_Y=812）
+  const lower = new Block('wood', 1000, 770, 80, 80, { static: true });
+  const lowerBody = new Body({ x: 1000, y: 770, w: 80, h: 80, static: true, restitution: 0.02, friction: 0.92, tag: 'block' });
+  lowerBody.owner = lower; lower.body = lowerBody;
+  g.world.add(lowerBody); g.blocks.push(lower);
+  // 上层（非 static，起始紧贴 lower 顶部）：y=700, h=60 → 下端 730 正好贴上下层顶端
+  const upper = new Block('wood', 1000, 700, 60, 60);
+  const upperBody = new Body({ x: 1000, y: 700, w: 60, h: 60, mass: 2.4, restitution: 0.02, friction: 0.92, tag: 'block' });
+  upperBody.owner = upper; upper.body = upperBody;
+  g.world.add(upperBody); g.blocks.push(upper);
+
+  // 让上层坐下。哪怕跑 360 步，重力 + 弹力让 vy 仍在 16px/s 附近抖动很难进入 sleeping；
+  // 直接强制把它设为 sleeping，只为构造「支撑消失」的测试场景 —— 这里要验证的是
+  // 「sleeping body 脚下失去支撑能否被唤醒并下落」，而不验证 sleeping 自身如何达成。
+  for (let s = 0; s < 240; s++) g.stepPhysics(1 / 120);
+  upperBody.vx = 0; upperBody.vy = 0;
+  upperBody.sleeping = true;
+  const settleY = upperBody.y;
+  const wasSleeping = upperBody.sleeping;
+
+  // 拆除下层支撑（被小鸟撞飞后的真实情况：下层 body 被标记为 removed）
+  lowerBody.removed = true; lower.dead = true;
+  g.world.flush();
+  // 跑物理看上层是否能落到地面（120 步 ≈ 1s，自由落体可掉约 138px）
+  for (let s = 0; s < 120; s++) g.stepPhysics(1 / 120);
+  const fellTo = upperBody.y;
+  const dropped = fellTo > settleY + 60;       // 至少下落 60px
+  const nearGround = (fellTo + upperBody.hh) >= GROUND_Y - 8;
+  const ok = wasSleeping && dropped && nearGround;
+  console.log(`  ${ok ? '✓' : '✗'} 下层拆除后上层木块下落：settleY=${settleY.toFixed(0)} 此前 sleep=${wasSleeping} 拆后 y=${fellTo.toFixed(0)} 接近地面=${nearGround}`);
+  if (!wasSleeping) bad('场景构造失败：上层木块未进入 sleeping，可能没贴住下层顶部');
+  if (!dropped) bad('下层拆除后上层木块没有失去支撑下落');
+  if (!nearGround) bad('上层木块唤醒后没真正落到地面');
   Save.reset();
 }
 
