@@ -530,6 +530,34 @@ html, body {
   animation:unlockRise .5s var(--ease-pop) .3s backwards;
 }
 
+/* 星级进度：距离下一颗星还差多少分 */
+.star-progress {
+  width:100%; text-align:center;
+  margin-top:-.45em;
+  font-size:clamp(10px,1.52vh,17px); font-weight:800;
+  color:#7c5a1c; letter-spacing:.02em;
+  text-shadow:0 1px 0 rgba(255,255,255,.8);
+  animation:unlockRise .45s var(--ease-pop) .2s backwards;
+}
+.star-progress.done { color:#c98a10; }
+
+/* 暂停面板：本关实时进度 */
+.pause-stats {
+  display:flex; flex-direction:column; align-items:center; gap:.45em;
+  width:100%;
+  font-size:clamp(11px,1.75vh,20px); font-weight:800;
+  color:var(--ink-soft);
+}
+.ps-item {
+  display:inline-block; text-align:center; line-height:1.5;
+  background:rgba(255,255,255,.68);
+  border:1.5px solid rgba(210,160,90,.34);
+  border-radius:var(--r-pill);
+  padding:.45em 1.35em;
+  box-shadow:inset 0 1px 0 #fff;
+}
+.ps-item b { color:#c2571a; font-size:1.1em; }
+
 .score-row {
   display:flex; justify-content:space-between; align-items:baseline;
   width:100%;

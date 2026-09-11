@@ -28,7 +28,7 @@ const UI = {
     };
     g.onState = () => this.updateHud();
     g.onHint = (text) => this.toast(text, text ? 2600 : 0);
-    g.onPause = (p) => this.show(p ? 'screen-pause' : null);
+    g.onPause = (p) => { if (p) this.updatePausePanel(); this.show(p ? 'screen-pause' : null); };
     g.onFinish = (res) => this.showResult(res);
     g.onEggFinish = (res) => this.showEggResult(res);
     g.onEggExit = () => { this.show('screen-menu'); this.refreshMenu(); };
@@ -136,8 +136,9 @@ const UI = {
     const g = this.game;
     if (g.mode !== 'birds' || !g.level) return;
     $('chip-level').textContent = `第 ${g.levelIndex + 1} 关 · ${g.level.name}`;
-    const left = g.birdQueue.length + (g.currentBird && g.phase === 'aim' ? 1 : 0);
-    $('chip-birds').textContent = `🐦 x${left}`;
+    const birdsLeft = g.birdQueue.length + (g.currentBird && g.phase === 'aim' ? 1 : 0);
+    const pigsLeft = g.pigs.filter(p => !p.dead).length;
+    $('chip-birds').textContent = `🐦 ${birdsLeft}　🐷 ${pigsLeft}`;
     const w = g.world.wind;
     const windBox = $('hud-wind');
     const arrow = windBox.querySelector('.wind-arrow');
@@ -151,6 +152,24 @@ const UI = {
       val.textContent = `${w > 0 ? '东风' : '西风'} ${Math.abs(Math.round(w / 10))} 级`;
     }
     $('hud-score').textContent = g.score.toLocaleString();
+  },
+
+  /* 暂停面板：展示本关实时进度，避免暂停后失去方向感 */
+  updatePausePanel() {
+    const g = this.game;
+    const el = $('pause-stats');
+    if (!el || g.mode !== 'birds' || !g.level) return;
+    this.toast('');   // 清掉关卡提示，避免透过面板模糊层残留
+    const pigsLeft = g.pigs.filter(p => !p.dead).length;
+    const birdsLeft = g.birdQueue.length + (g.currentBird && g.phase === 'aim' ? 1 : 0);
+    const tiers = g.level.stars;
+    const next = tiers.findIndex(v => g.score < v);
+    el.innerHTML =
+      `<span class="ps-item">🐷 剩余猪 <b>${pigsLeft}</b> / ${g.pigs.length}</span>` +
+      `<span class="ps-item">🐦 剩余鸟 <b>${birdsLeft}</b></span>` +
+      `<span class="ps-item">⭐ <b>${g.score.toLocaleString()}</b>` +
+      (next === -1 ? ' · 已满星' : ` · 距下一星还差 ${(tiers[next] - g.score).toLocaleString()}`) +
+      '</span>';
   },
 
   buildLevels() {
@@ -230,6 +249,22 @@ const UI = {
       eggHintEl.classList.toggle('hidden', !res.eggHint);
     }
     $('btn-next').style.display = (res.win && res.levelIndex + 1 < LEVELS.length) ? '' : 'none';
+    // 星级进度：告诉玩家距离下一颗星还差多少分
+    const progEl = $('result-star-progress');
+    if (progEl) {
+      if (res.win) {
+        const tiers = (LEVELS[res.levelIndex] || LEVELS[0])().stars;
+        const nextIdx = tiers.findIndex(v => res.score < v);
+        progEl.textContent = nextIdx === -1
+          ? '已达成 ★★★ 满分评价'
+          : `距 ★${nextIdx + 1} 还差 ${(tiers[nextIdx] - res.score).toLocaleString()} 分`;
+        progEl.classList.toggle('done', nextIdx === -1);
+        progEl.classList.remove('hidden');
+      } else {
+        progEl.classList.add('hidden');
+      }
+    }
+
     const stars = Array.from(document.querySelectorAll('#stars-row .star-big') || []);
     stars.forEach(s => { s.classList.remove('on'); s.style.animation = 'none'; });
     void panel.offsetWidth;
@@ -269,6 +304,8 @@ const UI = {
     if (nBadge) nBadge.classList.add('hidden');
     const eHint = $('result-egg-hint');
     if (eHint) eHint.classList.add('hidden');
+    const eProg = $('result-star-progress');
+    if (eProg) eProg.classList.add('hidden');
     $('btn-next').style.display = 'none';
     const stars = document.querySelectorAll('#stars-row .star-big');
     stars.forEach(s => s.classList.remove('on'));

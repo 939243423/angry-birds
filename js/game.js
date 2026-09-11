@@ -677,18 +677,25 @@ class Game {
       }
       ctx.restore();
     }
-    // 剩余鸟队列（弹弓后方排队）
-    const qy = GROUND_Y - 26;
-    for (let i = 0; i < Math.min(this.birdQueue.length, 4); i++) {
-      const type = this.birdQueue[i];
-      const d = BIRD_TYPES[type];
-      ctx.save();
-      ctx.globalAlpha = 0.95;
-      ctx.translate(SLING.x - 92 - i * 52, qy + Math.sin(this.time * 2 + i) * 3);
-      ctx.scale(0.82, 0.82);
-      const fake = { def: d, r: d.r, state: 'idle', blink: 3, squash: 0, armedBlast: false, fuse: 0, x: 0, y: 0, vx: 0, vy: 0 };
-      r.birdBody(ctx, fake, 0, this.time + i, 0);
-      ctx.restore();
+    // 剩余鸟队列（弹弓后方排队）—— 间距自适应，保证队列再长也不出画
+    const qn = this.birdQueue.length;
+    if (qn) {
+      const qy = GROUND_Y - 26;
+      const head = SLING.x - 92;              // 最靠近弹弓的一只
+      const edge = 46;                        // 画面左侧安全线
+      const gap = qn > 1 ? Math.min(52, (head - edge) / (qn - 1)) : 52;
+      const sc = gap < 44 ? 0.66 : 0.82;      // 挤的时候整体缩小
+      for (let i = 0; i < qn; i++) {
+        const type = this.birdQueue[i];
+        const d = BIRD_TYPES[type];
+        ctx.save();
+        ctx.globalAlpha = 0.95;
+        ctx.translate(head - i * gap, qy + Math.sin(this.time * 2 + i) * 3);
+        ctx.scale(sc, sc);
+        const fake = { def: d, r: d.r, state: 'idle', blink: 3, squash: 0, armedBlast: false, fuse: 0, x: 0, y: 0, vx: 0, vy: 0 };
+        r.birdBody(ctx, fake, 0, this.time + i, 0);
+        ctx.restore();
+      }
     }
     // 当前鸟
     for (const b of this.birds) if (!b.dead) r.drawBird(ctx, b, this.time);
