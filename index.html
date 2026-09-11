@@ -47,11 +47,18 @@
       <div class="menu-buttons">
         <button class="btn btn-primary" id="btn-play">开始冒险</button>
         <button class="btn" id="btn-levels">关卡选择</button>
-        <button class="btn btn-ghost" id="btn-egg">🥚 彩蛋关（通关第 3 关解锁）</button>
-        <button class="btn btn-ghost btn-small" id="btn-howto">玩法说明</button>
-        <button class="btn btn-ghost btn-small" id="btn-reset">清除存档</button>
+        <button class="btn btn-ghost btn-egg" id="btn-egg">🥚 彩蛋关（通关第 3 关解锁）</button>
+        <div class="menu-minor">
+          <button class="btn btn-ghost btn-small" id="btn-howto">玩法说明</button>
+          <button class="btn btn-ghost btn-small" id="btn-reset">清除存档</button>
+        </div>
       </div>
-      <div class="menu-footer">拖动弹弓发射 · 飞行中点击/空格释放技能</div>
+      <div class="menu-stat">
+        <span>⭐ <b id="menu-stars">0</b> / <span id="max-stars-menu">24</span></span>
+        <span class="stat-sep"></span>
+        <span>🥇 <b id="menu-feathers">0</b> / 3 金羽</span>
+      </div>
+      <div class="menu-footer">拖动弹弓发射 · 飞行中点击 / 空格释放技能</div>
     </div>
 
     <!-- ============ 关卡选择 ============ -->
@@ -143,6 +150,7 @@
           <span>本关得分</span>
           <b id="result-score">0</b>
         </div>
+        <div class="best-badge hidden" id="result-newbest">🎉 新纪录！</div>
         <div class="score-row small">
           <span>历史最佳</span>
           <b id="result-best">0</b>

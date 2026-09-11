@@ -134,9 +134,13 @@ const UI = {
     const left = g.birdQueue.length + (g.currentBird && g.phase === 'aim' ? 1 : 0);
     $('chip-birds').textContent = `🐦 x${left}`;
     const w = g.world.wind;
-    const arrow = $('hud-wind').querySelector('.wind-arrow');
-    const val = $('hud-wind').querySelector('.wind-val');
-    if (Math.abs(w) < 30) { arrow.style.transform = 'scaleX(0)'; val.textContent = '无风'; }
+    const windBox = $('hud-wind');
+    const arrow = windBox.querySelector('.wind-arrow');
+    const val = windBox.querySelector('.wind-val');
+    const calm = Math.abs(w) < 30;
+    windBox.classList.toggle('calm', calm);
+    windBox.classList.toggle('strong', Math.abs(w) >= 90);
+    if (calm) { arrow.style.transform = 'scaleX(0)'; val.textContent = '无风'; }
     else {
       arrow.style.transform = w > 0 ? 'scaleX(1)' : 'scaleX(-1)';
       val.textContent = `${w > 0 ? '东风' : '西风'} ${Math.abs(Math.round(w / 10))} 级`;
@@ -151,7 +155,7 @@ const UI = {
       const unlocked = i < Save.data.unlocked;
       const rec = Save.data.levels[i] || { stars: 0 };
       const cell = document.createElement('div');
-      cell.className = 'level-cell' + (unlocked ? '' : ' locked');
+      cell.className = 'level-cell' + (unlocked ? (rec.stars > 0 ? ' cleared' : '') : ' locked');
       cell.innerHTML = `<div class="lv-num">${i + 1}</div><div class="lv-stars">${'★'.repeat(rec.stars)}${'☆'.repeat(3 - rec.stars)}</div>`;
       if (unlocked) {
         cell.onclick = () => { Sfx.click(); this.startLevel(i); };
@@ -175,21 +179,33 @@ const UI = {
   },
 
   refreshMenu() {
+    const set = (id, v) => { const e = $(id); if (e) e.textContent = v; };
     const eggBtn = $('btn-egg');
-    if (!eggBtn) return;
-    const unlocked = Save.data.eggUnlocked;
-    eggBtn.classList.toggle('btn-primary', unlocked);
-    eggBtn.textContent = unlocked ? `🥚 彩蛋关 · 蛋了个蛋（金羽 ${Save.data.feathers}/3）` : '🥚 彩蛋关（通关第 3 关解锁）';
-    $('total-stars').textContent = Save.totalStars;
+    if (eggBtn) {
+      const unlocked = Save.data.eggUnlocked;
+      eggBtn.classList.toggle('btn-primary', unlocked);
+      eggBtn.textContent = unlocked
+        ? `🥚 彩蛋关 · 蛋了个蛋（${Save.data.feathers}/3）`
+        : '🥚 彩蛋关（通关第 3 关解锁）';
+    }
+    set('total-stars', Save.totalStars);
+    set('max-stars', LEVELS.length * 3);
+    set('menu-stars', Save.totalStars);
+    set('max-stars-menu', LEVELS.length * 3);
+    set('menu-feathers', Save.data.feathers);
   },
 
   showResult(res) {
+    this.toast('');   // 清掉关卡提示，避免透过面板模糊层残留
     this.show('screen-result');
     const panel = $('screen-result');
     $('result-title').textContent = res.win ? (res.stars === 3 ? '完美通关！' : '关卡完成！') : '小鸟用完了…';
     $('result-score').textContent = res.score.toLocaleString();
     const rec = Save.data.levels[res.levelIndex] || { score: 0 };
-    $('result-best').textContent = Math.max(rec.score, res.score).toLocaleString();
+    const best = Math.max(rec.score, res.score);
+    $('result-best').textContent = best.toLocaleString();
+    const badge = $('result-newbest');
+    if (badge) badge.classList.toggle('hidden', !(res.win && res.score > rec.score));
     $('btn-next').style.display = (res.win && res.levelIndex + 1 < LEVELS.length) ? '' : 'none';
     const stars = Array.from(document.querySelectorAll('#stars-row .star-big') || []);
     stars.forEach(s => { s.classList.remove('on'); s.style.animation = 'none'; });
@@ -211,10 +227,13 @@ const UI = {
   },
 
   showEggResult(res) {
+    this.toast('');
     this.show('screen-result');
     $('result-title').textContent = res.win ? '彩蛋关通关！' : '槽位满了…';
     $('result-score').textContent = res.score.toLocaleString();
     $('result-best').textContent = `金羽 ${Save.data.feathers} / 3`;
+    const nBadge = $('result-newbest');
+    if (nBadge) nBadge.classList.add('hidden');
     $('btn-next').style.display = 'none';
     const stars = document.querySelectorAll('#stars-row .star-big');
     stars.forEach(s => s.classList.remove('on'));
