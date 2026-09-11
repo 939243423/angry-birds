@@ -395,6 +395,12 @@ console.log('— 救援配额（每日次数 / 清空机会 / 激活码） —')
   console.log(`  ${r.ok && r.added === 5 && leftNow === 5 && Save.data.rescueCredit === 5 ? '✓' : '✗'} 今日耗尽激活：left=${leftNow}（count=${Save.data.rescueCount} credit=${Save.data.rescueCredit}）`);
   if (!r.ok || r.added !== 5 || leftNow !== 5 || Save.data.rescueCredit !== 5) bad('激活码应在今日耗尽时把 credit 加 5，今日 left=5');
 
+  // 展示拆分：UI 不能把「合计」直接除以 3 显示（否则激活后会变成 5/3 这种怪值）
+  const dsp = { daily: Save.rescueDailyLeft, credit: Save.rescueCreditLeft };
+  const showOk = dsp.daily === 0 && dsp.daily <= 3 && dsp.credit === 5;
+  console.log(`  ${showOk ? '✓' : '✗'} 面板展示拆分：今日 ${dsp.daily}/3 + 额外 ${dsp.credit}（合计 ${Save.rescueLeft}）`);
+  if (!showOk) bad('展示应拆成「今日(≤3)」+「额外」，不能直接显示合计/3');
+
   // credit 跨日不重置 + 与今日配额叠加（跨日同时恢复今日 3 次额度）
   const origToday2 = Save._todayKey;
   Save._todayKey = () => origToday2() + 1;
@@ -597,6 +603,25 @@ console.log('— UI 初始化与交互 —');
     console.log(`  ${ok ? '✓' : '✗'} 确认弹窗 显示=${confirmShown} 触发回调=${confirmRan} 已关闭=${confirmClosed} 标题=${JSON.stringify(confirmTitle)}`);
     if (!ok) bad('确认弹窗流程异常');
     if (confirmTitle !== '测试确认') bad('确认弹窗标题未按参数渲染');
+
+    // 清档必须真的扣 1 次清空机会：Save.reset() 会把 rescueResets 复位成 3，
+    // 若 UI 层不显式扣回，清档就等于"清空机会无限刷新"，三次限制形同虚设。
+    // 另：激活码充入的 credit 是玩家申请来的额度，清档只清进度、不没收。
+    Save.reset();
+    Save.data.rescueResets = 2;
+    Save.data.rescueCount = 3;            // 今日已用完 → 清档可刷新救援次数
+    Save.data.rescueCredit = 4;
+    Save.save();
+    document.getElementById('btn-reset').onclick();            // 打开自绘确认框
+    document.getElementById('btn-confirm-ok').onclick();       // 点「确认清除」
+    const resetsNow = Save.data.rescueResets;
+    const dailyNow = Save.rescueDailyLeft;
+    const creditNow = Save.rescueCreditLeft;
+    const resetRuleOk = resetsNow === 1 && dailyNow === 3 && creditNow === 4;
+    console.log(`  ${resetRuleOk ? '✓' : '✗'} 清档配额结算：清空 2→${resetsNow}，今日救援→${dailyNow}/3，credit 保留 ${creditNow}`);
+    if (resetsNow !== 1) bad('清档必须消耗 1 次清空机会（Save.reset 会复位，UI 需显式扣回）');
+    if (dailyNow !== 3) bad('清档后今日救援次数应恢复为 3');
+    if (creditNow !== 4) bad('清档不应没收激活码充入的额外次数');
   } catch (e) {
     bad('UI 流程异常: ' + e.message + '\n' + (e.stack || '').split('\n').slice(1, 4).join('\n'));
   }

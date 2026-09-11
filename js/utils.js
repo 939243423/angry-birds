@@ -92,6 +92,7 @@ const Save = {
       rescueDay: this._todayKey(),   // 上次重置救援次数的日期；不等于今天则 count 清零
       rescueCount: 0,               // 今日已用救援次数
       rescueResets: RESCUE_RESET_MAX, // 剩余清空机会（初始 3）
+      rescueCredit: 0,              // 激活码累计充入的额外救援次数（跨日不重置）
       rescueActivated: 0            // 已使用激活码次数（无上限，仅供玩家自检）
     };
   },
@@ -123,11 +124,18 @@ const Save = {
   get totalFeathers() {
     return (this.data.eggCleared[0] ? 1 : 0) + (this.data.eggCleared[1] ? 2 : 0);
   },
+  /** 今日剩余救援次数（不含激活码充入的额外次数） */
+  get rescueDailyLeft() {
+    this._maybeResetDaily();
+    return Math.max(0, RESCUE_DAILY_MAX - this.data.rescueCount);
+  },
+  /** 激活码带来的额外救援次数（跨日保留） */
+  get rescueCreditLeft() {
+    return Math.max(0, this.data.rescueCredit || 0);
+  },
   /** 当前可用救援次数 = 今日剩余 + 累计额外次数 */
   get rescueLeft() {
-    this._maybeResetDaily();
-    const daily = Math.max(0, RESCUE_DAILY_MAX - this.data.rescueCount);
-    return daily + Math.max(0, this.data.rescueCredit || 0);
+    return this.rescueDailyLeft + this.rescueCreditLeft;
   },
   /** 触发一次救援：先扣今日次数、再扣累计额外次数 */
   consumeRescue() {

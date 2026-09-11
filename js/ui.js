@@ -77,10 +77,17 @@ const UI = {
         danger: true,
         back: 'screen-menu',
         onOk: () => {
+          // 坑：Save.reset() 会把所有配额字段一起归位（rescueResets 回到 3）。
+          // 若不在这里显式扣回，清档就等于"清空机会无限刷新"，与设计意图完全相反。
+          // 另外激活码充入的 credit 是玩家申请的资产，清档只清进度、不没收。
+          const keepCredit = Save.rescueCreditLeft;
           Save.reset();
+          Save.data.rescueResets = resetsLeft > 0 ? resetsLeft - 1 : 0;
+          Save.data.rescueCredit = keepCredit;
+          Save.save();
           this.buildLevels();
           this.refreshMenu();
-          this.toast(willRefresh && resetsLeft > 0
+          this.toast(resetsLeft > 0
             ? '存档已清除，进度已重置，救援次数已刷新'
             : '存档已清除，进度已重置');
         }
@@ -400,23 +407,21 @@ const UI = {
     set('max-stars-menu', LEVELS.length * 3);
     set('menu-feathers', Save.data.feathers);
 
-    // 救援配额展示：今日剩余 + 清空机会。0 时换红色警示
-    const rl = Save.rescueLeft;
+    // 救援配额展示：今日剩余 + 激活码额外 + 清空机会。0 时换红色警示
+    const rl = Save.rescueDailyLeft;          // 今日剩余（上限 3）
+    const rc = Save.rescueCreditLeft;         // 激活码充入的额外次数
     const rs = Save.data.rescueResets;
+    const totalLeft = rl + rc;                // 实际可用总次数
     const rlEl = $('menu-rescue-left'); if (rlEl) rlEl.textContent = rl;
+    const rcEl = $('menu-credit-left'); if (rcEl) rcEl.textContent = rc;
+    const rcWrap = $('menu-credit-inline'); if (rcWrap) rcWrap.classList.toggle('hidden', rc <= 0);
     const rsEl = $('menu-reset-left'); if (rsEl) rsEl.textContent = rs;
-    $('menu-rescue-inline') && $('menu-rescue-inline').classList.toggle('exhausted', rl === 0);
+    $('menu-rescue-inline') && $('menu-rescue-inline').classList.toggle('exhausted', totalLeft === 0);
     $('menu-reset-inline') && $('menu-reset-inline').classList.toggle('exhausted', rs === 0);
     // 清空机会用完后，"清除存档"按钮改成去激活码申请入口
     const resetBtn = $('btn-reset');
     if (resetBtn) {
-      if (rs === 0 && rl === 0) {
-        resetBtn.textContent = '申请救援次数';
-      } else if (rs === 0) {
-        resetBtn.textContent = '清除存档';
-      } else {
-        resetBtn.textContent = '清除存档';
-      }
+      resetBtn.textContent = (rs === 0 && totalLeft === 0) ? '申请救援次数' : '清除存档';
     }
   },
 
@@ -426,10 +431,16 @@ const UI = {
     const rescueLeft = Math.max(0, info.rescueLeft | 0);
     const resetLeft = Math.max(0, info.resetLeft | 0);
     const pigsLeft = info.pigsLeft | 0;
-    // 状态条永远显示当前额度（让玩家对剩余资源有数）
-    const rlEl = $('rescue-left'); if (rlEl) rlEl.textContent = rescueLeft;
+    // 状态条永远显示当前额度（让玩家对剩余资源有数）。
+    // 拆成两枚徽章：今日剩余 / 3，以及激活码充入的「额外」次数 ——
+    // 否则用激活码后合计会超过 3，显示成 "5/3" 很怪。
+    const dailyLeft = Save.rescueDailyLeft;
+    const creditLeft = Save.rescueCreditLeft;
+    const rlEl = $('rescue-left'); if (rlEl) rlEl.textContent = dailyLeft;
+    const rcEl = $('rescue-credit'); if (rcEl) rcEl.textContent = creditLeft;
+    const rcStat = $('rescue-credit-stat'); if (rcStat) rcStat.classList.toggle('hidden', creditLeft <= 0);
     const rsEl = $('rescue-resets'); if (rsEl) rsEl.textContent = resetLeft;
-    $('rescue-stat') && $('rescue-stat').classList.toggle('exhausted', rescueLeft === 0);
+    $('rescue-stat') && $('rescue-stat').classList.toggle('exhausted', dailyLeft === 0 && creditLeft === 0);
     $('rescue-reset-stat') && $('rescue-reset-stat').classList.toggle('exhausted', resetLeft === 0);
     // 决定走哪个模式
     const forceActivate = !!info.forceActivate;
@@ -455,7 +466,7 @@ const UI = {
       if (resetRow) resetRow.classList.toggle('hidden', resetLeft <= 0);
       // 描述里明示当前资源
       const intro = rescueLeft === 0
-        ? `今日救援次数 <b>已用完</b>（${0}/3），清空机会 <b>${resetLeft > 0 ? '剩 ' + resetLeft : '已耗尽'}</b>。`
+        ? `今日救援次数 <b>已用完</b>（${dailyLeft}/3），清空机会 <b>${resetLeft > 0 ? '剩 ' + resetLeft : '已耗尽'}</b>。`
         : `当前还能用救援，但你想直接申请激活码。`;
       const introEl = $('rescue-mode-activate').querySelector('.rescue-desc');
       if (introEl) {
