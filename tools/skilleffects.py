@@ -3,10 +3,13 @@
 用法（必须用装了 playwright 的 venv 解释器）：
   C:/Users/杜若/.workbuddy/binaries/python/envs/default/Scripts/python.exe tools/skilleffects.py
 
-做法：在 skill-demo.html 页面里，对每只鸟执行
+做法：在 index.html?level=10（图鉴专用 L_TEST 测试关）页面里，对每只鸟执行
   【建鸟 → 记录基线 → 放进飞行状态 → useSkill() → 比对可观测量】
 所有操作在**同一次 evaluate 内**完成，避免跨帧时物理推进把 before/after 搅在一起
 （skillcheck.py 曾因跨 evaluate 得到 7/9 假阴性，踩过）。
+
+2026-09-11 升级：从独立的 skill-demo.html 切到 L_TEST 测试关，
+          通过 ?level=10 URL 直达，复用完整 game/bird 逻辑。
 """
 import http.server
 import json
@@ -40,7 +43,7 @@ EXPECT = {
 }
 
 PROBE_JS = """() => {
-  const g = window.__g;
+  const g = window.__game;          // ui.init() 暴露的全局句柄（旧 demo 是 __g）
   const results = {};
   const TYPES = ['red','yellow','blue','black','green','violet','orange','white','giant'];
 
@@ -159,7 +162,7 @@ def main() -> int:
             page = browser.new_page(viewport={'width': 1280, 'height': 1280})
             errs = []
             page.on('pageerror', lambda e: errs.append(str(e)))
-            page.goto(f'{base}/skill-demo.html', wait_until='load')
+            page.goto(f'{base}/index.html?level=10', wait_until='load')
             page.wait_for_timeout(300)
             res = page.evaluate(PROBE_JS)
             browser.close()

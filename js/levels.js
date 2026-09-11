@@ -222,6 +222,71 @@ function L10() {
   };
 }
 
+/* L_TEST：技能测试关（图鉴跳转专用）
+ *
+ * 不放进 LEVELS 数组 —— 它**不算主线关**，不会出现在关卡选择网格、
+ * 不计入存档、不影响解锁与星级。玩家通过 index.html?level=10&bird=<type>
+ * 直达；详见 game.js loadLevelTest() / TEST_LEVEL_INDEX。
+ *
+ * 坐标全部走 stack()/beam()，禁止手算 y。skill-demo.html 第一版的惨痛教训：
+ *   stack([], 1000, [...]) 只算了柱顶却没有把柱压入 B，
+ *   g.addBlock 又手算 y = GROUND_Y - 55，结果柱悬空 17px → 自由落体 →
+ *   顶上的 TNT 受击即爆 → 200ms 内中央塔自爆，凭空 +8400 分。
+ *
+ * 靶场结构覆盖 9 种技能（每只鸟都有"用武之地"）：
+ *   中央 TNT 高塔     — 红鸟爆裂 / 黑鸟炸弹 / 连锁爆炸
+ *   左石塔           — 黄鸟穿透 / 泰坦撞击
+ *   右冰塔           — 蓝鸟专属（专破冰）
+ *   弹弓后悬空高台    — 绿鸟折返 / 紫鸟引力（不用技能碰不到）
+ *   地面散落 4 个目标  — 蓝分裂 / 白空投 / 橙膨胀 / 多目标测试
+ *   1 只钢盔猪       — 高血量目标（验证伤害量级） */
+function L_TEST() {
+  const B = [], P = [];
+  // ---- 中央 TNT 高塔（红鸟爆裂 / 黑鸟炸弹）----
+  const cL = stack(B, 1000, [['wood', 30, 110]]);
+  stack(B, 1180, [['wood', 30, 110]]);
+  const beamTop = beam(B, 'wood', 1090, cL, 240, 26);
+  beam(B, 'tnt', 1090, beamTop, 50, 50);              // TNT 坐梁顶，自动堆叠不会自爆
+
+  // ---- 左石塔（黄鸟穿透 + 普通猪）----
+  const ltTop = stack(B, 800, [['stone', 44, 44], ['stone', 44, 44]]);
+  const ltBeam = beam(B, 'wood', 800, ltTop, 110, 22);
+  P.push({ type: 'normal', x: 800, y: ltBeam - 26 });
+
+  // ---- 右冰塔（蓝鸟专属）----
+  const riTop = stack(B, 1380, [['ice', 44, 44], ['ice', 44, 44]]);
+  const riBeam = beam(B, 'ice', 1380, riTop, 110, 22);
+  P.push({ type: 'normal', x: 1380, y: riBeam - 26 });
+
+  // ---- 弹弓后方悬空高台（绿折返 / 紫引力专属，static 永不下落）----
+  beam(B, 'stone', 600, GROUND_Y - 380, 200, 26, { static: true });
+  P.push({ type: 'small', x: 580, y: GROUND_Y - 380 - 13 - 19 });
+  P.push({ type: 'small', x: 660, y: GROUND_Y - 380 - 13 - 19 });
+
+  // ---- 地面散落小目标（蓝分裂 / 白空投 / 橙膨胀）----
+  P.push({ type: 'small', x: 940,  y: GROUND_Y - 19 });
+  P.push({ type: 'small', x: 1100, y: GROUND_Y - 19 });
+  P.push({ type: 'small', x: 1280, y: GROUND_Y - 19 });
+  P.push({ type: 'helmet', x: 1450, y: GROUND_Y - 28 });
+
+  return {
+    name: '技能测试关', tip: '图鉴专用：拖弓发射，飞行中点屏放技能，HUD ↻ 重置队列',
+    decor: 'day', wind: 0,
+    // 9 只鸟固定顺序循环（图鉴跳转的指定 type 会前置到第 0 位）
+    birds: ['red', 'yellow', 'blue', 'black', 'green', 'violet', 'orange', 'white', 'giant'],
+    stars: [0, 0, 0],       // 测试关不评星（finishLevel 见到 isTest 直接短路）
+    blocks: B, pigs: P, isTest: true
+  };
+}
+
+// 测试关在关卡选择 / 存档体系里的"虚拟索引"。URL ?level=10 命中这个常量。
+// 不进 LEVELS 数组 —— 否则会被误当 11 关解锁、关卡网格多出第 11 个红格、存档被污染。
+const TEST_LEVEL_INDEX = 10;
+
+// 测试关里 9 只鸟的固定循环顺序（nextBird 用）。
+// 写常量避免每次重 new 一份数组，也方便 ui.js 在 HUD 里按相同顺序渲染剩余队列。
+const L_TEST_BIRDS = ['red', 'yellow', 'blue', 'black', 'green', 'violet', 'orange', 'white', 'giant'];
+
 const LEVELS = [L1, L2, L3, L4, L5, L6, L7, L8, L9, L10];
 
 function buildLevel(index) {

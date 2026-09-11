@@ -35,13 +35,19 @@ class Game {
     this.endTimer = 0;
     this.rescueUsed = false;     // 保留字段以兼容旧测试（每关救援是否已触发，依赖 Save.rescueLeft）
     this.combo = 0; this.comboTimer = 0;
-    this.drag = { active: false, id: null };
-    this.pointer = { x: 0, y: 0 };
-    this.aimPoints = [];
-    this.aimHit = null;
-    this.resultShown = false;
-    this.launchCount = 0;
-    this.egg = new EggGame(this);
+this.drag = { active: false, id: null };
+      this.pointer = { x: 0, y: 0 };
+      this.aimPoints = [];
+      this.aimHit = null;
+      this.resultShown = false;
+      this.launchCount = 0;
+
+      // 测试关（图鉴跳转专用，L_TEST）相关状态：见 loadLevelTest()。
+      // 普通关卡下 isTestLevel=false，nextBird/afterShot/finishLevel 都走原逻辑。
+      this.isTestLevel = false;
+      this.testQueueCursor = 0;        // 测试关用指针循环，不走 birdQueue.shift()
+
+      this.egg = new EggGame(this);
 
     this.bindInput();
     this.renderer.resize();
@@ -152,40 +158,76 @@ class Game {
 
   /* ---------------- 关卡 ---------------- */
   loadLevel(index) {
-    const def = buildLevel(index);
-    this.level = def;
-    this.levelIndex = index;
-    this.mode = 'birds';
-    this.paused = false;
-    this.renderer.setTheme(def.decor);
-    this.world.clear();
-    this.particles.clear();
-    this.blocks = []; this.pigs = []; this.birds = [];
-    this.springs = []; this.portals = []; this.fans = [];
-    this.pendingBooms = [];
-    this.wells = [];
-    this.drops = [];
-    this.prevPath = [];
-    this.score = 0;
-    this.combo = 0;
-    this.launchCount = 0;
-    this.rescueUsed = false;
-    this.resultShown = false;
-    this.world.wind = def.wind || 0;
-    this.fx.shake = 0; this.fx.flash = 0; this.fx.timeScale = 1;
+const def = buildLevel(index);
+      this._initLevelFromDef(def);
+      this.birdQueue = def.birds.slice();
+      this.isTestLevel = !!def.isTest;
+      this.testQueueCursor = 0;
+      this.phase = 'aim';
+      this.nextBird();
+      this.emitState();
+    }
 
-    for (const b of def.blocks) this.addBlock(b);
-    for (const p of def.pigs) this.addPig(p);
-    for (const s of def.springs) this.addSpring(s[0], s[1], s[2]);
-    for (const p of def.portals) this.portals.push(new Portal(p[0], p[1], p[2], p[3], p[4], p[5]));
-    for (const f of def.fans) this.fans.push(new Fan(f[0], f[1], f[2], f[3], f[4], f[5]));
+    /** 测试关专用入口（图鉴跳转命中 ?level=TEST_LEVEL_INDEX 时调用）。
+     *  复用 loadLevel 的初始化逻辑（共享 _initLevelFromDef），但鸟队列用游标循环，
+     *  不走 shift()。preferredType（图鉴点中的鸟）会被前置到第 0 位。 */
+    loadLevelTest(preferredType) {
+      const def = L_TEST();
+      def.index = TEST_LEVEL_INDEX;
+      this._initLevelFromDef(def);
+      const pool = def.birds.slice();
+      if (preferredType && pool.includes(preferredType)) {
+        // 图鉴选中的那只置顶，其余保持原顺序
+        const rest = pool.filter(t => t !== preferredType);
+        this.birdQueue = [preferredType, ...rest];
+      } else {
+        this.birdQueue = pool;
+      }
+      this.isTestLevel = true;
+      this.testQueueCursor = 0;
+      this.nextBird();
+      this.emitState();
+    }
 
-    this.birdQueue = def.birds.slice();
-    this.phase = 'aim';
-    this.nextBird();
-    this.camX = 0; this.camZoom = 1;
-    this.emitState();
-  }
+    /** loadLevel 与 loadLevelTest 共用的关卡初始化（清场 / 摆砖 / 摆猪 / 摆机关）。
+     *  从 loadLevel 抽出来是为了避免两路径代码重复。 */
+    _initLevelFromDef(def) {
+      this.level = def;
+      this.levelIndex = def.index;
+      this.mode = 'birds';
+      this.paused = false;
+      this.renderer.setTheme(def.decor);
+      this.world.clear();
+      this.particles.clear();
+      this.blocks = []; this.pigs = []; this.birds = [];
+      this.springs = []; this.portals = []; this.fans = [];
+      this.pendingBooms = [];
+      this.wells = [];
+      this.drops = [];
+      this.prevPath = [];
+      this.score = 0;
+      this.combo = 0;
+      this.launchCount = 0;
+      this.rescueUsed = false;
+      this.resultShown = false;
+      this.world.wind = def.wind || 0;
+      this.fx.shake = 0; this.fx.flash = 0; this.fx.timeScale = 1;
+
+      // 与 buildLevel() 对齐：缺字段时补空数组。loadLevelTest 走的关卡
+      // （L_TEST）通常没有 springs/portals/fans，但 update 里会迭代这些数组，
+      // 直接 .push() / .length = 0 没问题，可迭代前提是非 undefined。
+      const springs = def.springs || [];
+      const portals = def.portals || [];
+      const fans = def.fans || [];
+
+      for (const b of def.blocks) this.addBlock(b);
+      for (const p of def.pigs) this.addPig(p);
+      for (const s of springs) this.addSpring(s[0], s[1], s[2]);
+      for (const p of portals) this.portals.push(new Portal(p[0], p[1], p[2], p[3], p[4], p[5]));
+      for (const f of fans) this.fans.push(new Fan(f[0], f[1], f[2], f[3], f[4], f[5]));
+
+      this.camX = 0; this.camZoom = 1;
+    }
 
   addBlock(def) {
     const b = new Block(def.mat, def.x, def.y, def.w, def.h, { static: def.static });
@@ -225,15 +267,28 @@ class Game {
     return s;
   }
 
-  nextBird() {
-    if (!this.birdQueue.length) { this.currentBird = null; return; }
-    const type = this.birdQueue.shift();
-    const b = new Bird(type, SLING.x, SLING.y - 14);
-    this.birds.push(b);
-    this.currentBird = b;
-    this.phase = 'aim';
-    this.emitState();
-  }
+nextBird() {
+      if (this.isTestLevel) {
+        // 测试关：9 只鸟无限循环。queue 为空（被外部清空后）时重新铺满
+        const all = L_TEST_BIRDS;
+        if (!this.birdQueue.length) this.birdQueue = all.slice();
+        const type = this.birdQueue[this.testQueueCursor % this.birdQueue.length];
+        this.testQueueCursor = (this.testQueueCursor + 1) % this.birdQueue.length;
+        const b = new Bird(type, SLING.x, SLING.y - 14);
+        this.birds.push(b);
+        this.currentBird = b;
+        this.phase = 'aim';
+        this.emitState();
+        return;
+      }
+      if (!this.birdQueue.length) { this.currentBird = null; return; }
+      const type = this.birdQueue.shift();
+      const b = new Bird(type, SLING.x, SLING.y - 14);
+      this.birds.push(b);
+      this.currentBird = b;
+      this.phase = 'aim';
+      this.emitState();
+    }
 
   /** 为小鸟挂接物理刚体 */
   attachBird(bird, vx, vy) {
@@ -700,42 +755,54 @@ class Game {
     this.camZoom = damp(this.camZoom, targetZ, 3, rdt);
   }
 
-  afterShot() {
-    if (this.currentBird && !this.currentBird.dead) {
-      this.currentBird.state = 'resting';
-      if (this.currentBird.body) { this.currentBird.body.removed = true; this.currentBird.body = null; }
-    }
-    const pigsLeft = this.pigs.filter(p => !p.dead).length;
-    if (pigsLeft === 0) {
-      this.phase = 'winning'; this.endTimer = 1.25;
-      Sfx.win();
-      this.fx.slow(1.1, 0.4);
-      this.fx.confetti(VW / 2, 260, 60);
-      return;
-    }
-    if (!this.birdQueue.length) {
-      // 救援机制：小鸟用尽但猪还在 —— 通知 UI 让用户确认是否使用救援巨鸟。
-      // 旧的「直接赠送一只」会导致玩家在不需要时也被白给 + 次数无限，违反用户预期。
-      // 新流程：UI 弹救援确认弹窗，玩家可「使用救援 / 放弃救援」二选一；
-      // 若今日次数已耗尽，UI 进一步走「清空次数 / 激活码 / 放弃」三级降级。
-      this.phase = 'rescue';        // 暂停关卡推进，等玩家决策
-      this.emitState();
-      if (this.onRescueRequest) {
-        this.onRescueRequest({
-          pigsLeft,
-          rescueLeft: Save.rescueLeft,
-          resetLeft: Save.data.rescueResets
-        });
+afterShot() {
+      if (this.currentBird && !this.currentBird.dead) {
+        this.currentBird.state = 'resting';
+        if (this.currentBird.body) { this.currentBird.body.removed = true; this.currentBird.body = null; }
+      }
+      const pigsLeft = this.pigs.filter(p => !p.dead).length;
+      if (pigsLeft === 0) {
+        if (this.isTestLevel) {
+          // 测试关：打完不弹结算面板，直接结算并立刻换下一只让玩家继续测
+          this.finishLevel(true);
+          return;
+        }
+        this.phase = 'winning'; this.endTimer = 1.25;
+        Sfx.win();
+        this.fx.slow(1.1, 0.4);
+        this.fx.confetti(VW / 2, 260, 60);
         return;
       }
-      // 无 UI 兜底（旧测试/无人态）：直接判负，避免卡死
-      this.phase = 'losing'; this.endTimer = 1.1; Sfx.lose();
-      return;
+      if (!this.birdQueue.length) {
+        // 测试关：永远有下一只可换（nextBird 里 cursor 循环），跳过救援分支
+        if (this.isTestLevel) {
+          this.phase = 'settle';
+          this.endTimer = 0.4;
+          this.hideSkillHint();
+          return;
+        }
+        // 救援机制：小鸟用尽但猪还在 —— 通知 UI 让用户确认是否使用救援巨鸟。
+        // 旧的「直接赠送一只」会导致玩家在不需要时也被白给 + 次数无限，违反用户预期。
+        // 新流程：UI 弹救援确认弹窗，玩家可「使用救援 / 放弃救援」二选一；
+        // 若今日次数已耗尽，UI 进一步走「清空次数 / 激活码 / 放弃」三级降级。
+        this.phase = 'rescue';        // 暂停关卡推进，等玩家决策
+        this.emitState();
+        if (this.onRescueRequest) {
+          this.onRescueRequest({
+            pigsLeft,
+            rescueLeft: Save.rescueLeft,
+            resetLeft: Save.data.rescueResets
+          });
+          return;
+        }
+        // 无 UI 兜底（旧测试/无人态）：直接判负，避免卡死
+        this.phase = 'losing'; this.endTimer = 1.1; Sfx.lose();
+        return;
+      }
+      this.phase = 'settle';
+      this.endTimer = 0.55;
+      this.hideSkillHint();
     }
-    this.phase = 'settle';
-    this.endTimer = 0.55;
-    this.hideSkillHint();
-  }
 
   /** UI 端「使用救援」按钮调用：消耗 1 次救援配额，把「泰坦巨力」挂上弹弓，
    *  让玩家自己拉弓发射。后续流程与普通小鸟一致 —— 玩家正常拖动 → 松手发射 →
@@ -768,23 +835,32 @@ class Game {
     else { this.phase = 'losing'; this.endTimer = 0.9; Sfx.lose(); }
   }
 
-  finishLevel(win) {
-    if (this.resultShown) return;
-    this.resultShown = true;
-    const remaining = this.birdQueue.length;
-    if (win) {
-      this.score += remaining * 10000;
-      if (remaining) this.fx.scoreText(VW / 2, 300, `剩余小鸟 +${remaining * 10000}`, '#7bd389', 40);
-    }
-    const stars = win ? this.level.stars.reduce((s, v) => s + (this.score >= v ? 1 : 0), 0) : 0;
-    const rec = Save.data.levels[this.levelIndex] || { stars: 0, score: 0 };
-    Save.data.levels[this.levelIndex] = {
-      stars: Math.max(rec.stars, stars),
-      score: Math.max(rec.score, win ? this.score : rec.score)
-    };
-    if (win && this.levelIndex + 1 >= Save.data.unlocked) {
-      Save.data.unlocked = Math.min(LEVELS.length, this.levelIndex + 2);
-    }
+finishLevel(win) {
+      if (this.resultShown) return;
+      this.resultShown = true;
+      if (this.isTestLevel) {
+        // 测试关：**绝对不写 Save / 不弹结算面板 / 不解锁**。
+        // 只是刷一下分数显示，nextBird 会换下一只让玩家继续测。
+        this.emitScore();
+        this.resultShown = false;
+        this.phase = 'aim';
+        this.nextBird();
+        return;
+      }
+      const remaining = this.birdQueue.length;
+      if (win) {
+        this.score += remaining * 10000;
+        if (remaining) this.fx.scoreText(VW / 2, 300, `剩余小鸟 +${remaining * 10000}`, '#7bd389', 40);
+      }
+      const stars = win ? this.level.stars.reduce((s, v) => s + (this.score >= v ? 1 : 0), 0) : 0;
+      const rec = Save.data.levels[this.levelIndex] || { stars: 0, score: 0 };
+      Save.data.levels[this.levelIndex] = {
+        stars: Math.max(rec.stars, stars),
+        score: Math.max(rec.score, win ? this.score : rec.score)
+      };
+      if (win && this.levelIndex + 1 >= Save.data.unlocked) {
+        Save.data.unlocked = Math.min(LEVELS.length, this.levelIndex + 2);
+      }
     // 彩蛋关解锁条件：累计 EGG_UNLOCK_STARS 颗星（不限关卡，任意关都能贡献）
     // 旧条件「第 3 关 2 星」把门槛绑死在单关，玩家如果卡在第 3 关就永远拿不到；
     // 改成累计星数后可分多次推进，且与「通关必得 1 星」配套 —— 通关 6 关即可解锁。
@@ -1011,9 +1087,27 @@ class Game {
    * 九只鸟的被动效果（加速 / 分裂 / 引信…）在手感上容易被忽略，
    * 播报把"我刚放了什么招"明确写给玩家看。
    */
-  announceSkill(bird) {
-    const d = bird.def;
-    this.fx.scoreText(bird.x, bird.y - bird.r - 26, d.skill, '#fff6cf', 30);
-    this.fx.addFlash(0.12);
+announceSkill(bird) {
+      const d = bird.def;
+      this.fx.scoreText(bird.x, bird.y - bird.r - 26, d.skill, '#fff6cf', 30);
+      this.fx.addFlash(0.12);
+    }
   }
-}
+
+  /* ---------------- URL 入口解析（独立工具，UI 在 init 里调用） ----------------
+   * 这里不在 Game 类里挂 fromUrl 静态方法 —— Node/jsdom 环境（tools/smoke.js）
+   * 没有 location.search，直接调 Game.fromUrl 会 ReferenceError。
+   * 因此 URL 解析单独成一个函数，UI 层在浏览器里调；测试层仍然用 new Game(canvas)。 */
+  function gameFromUrl(canvas) {
+    const g = new Game(canvas);
+    if (typeof location === 'undefined' || !location.search) return g;
+    const params = new URLSearchParams(location.search);
+    const lvl = params.get('level');
+    const bird = params.get('bird');
+    if (lvl === null) return g;
+    const idx = parseInt(lvl, 10);
+    if (!Number.isFinite(idx)) return g;
+    if (idx === TEST_LEVEL_INDEX) g.loadLevelTest(bird || undefined);
+    else if (idx >= 0 && idx < LEVELS.length) g.loadLevel(idx);
+    return g;
+  }

@@ -8,35 +8,47 @@ const $ = id => document.getElementById(id);
 const UI = {
   game: null,
   screen: 'menu',
-  init() {
-    Save.load();
-    this.game = new Game($('game'));
-    window.__game = this.game;
-    const g = this.game;
+init() {
+      Save.load();
+      // 用 gameFromUrl：URL 带 ?level=&bird= 时直接进入对应关卡
+      // （图鉴跳转命中 ?level=TEST_LEVEL_INDEX → loadLevelTest）；无参时等同于 new Game。
+      this.game = gameFromUrl($('game'));
+      window.__game = this.game;
+      const g = this.game;
 
-    // 菜单背景：当前进度所在关卡的场景（「开始冒险」会进入的那一关）
-    this.loadMenuScene();
+      // 菜单背景：当前进度所在关卡的场景（「开始冒险」会进入的那一关）
+      this.loadMenuScene();
 
-    this.buildLevels();
-    this.buildLegend();
+      this.buildLevels();
+      this.buildLegend();
 
-    g.onScore = (s) => {
-      const el = $('hud-score');
-      el.textContent = s.toLocaleString();
-      el.classList.add('pop');
-      setTimeout(() => el.classList.remove('pop'), 130);
-    };
-    g.onState = () => this.updateHud();
-    g.onHint = (text) => this.toast(text, text ? 2600 : 0);
-    g.onPause = (p) => {
-      Music.duck(p);                       // 暂停时把 BGM 压下去，回到游戏再抬起来
-      if (p) this.updatePausePanel();
-      this.show(p ? 'screen-pause' : null);
-    };
-    g.onFinish = (res) => this.showResult(res);
-    g.onEggFinish = (res) => this.showEggResult(res);
-    g.onEggExit = () => { this.show('screen-menu'); this.refreshMenu(); };
-    g.onRescueRequest = (info) => this.promptRescue(info);
+// URL 命中测试关 → 走测试关入口（startTestLevel 会再触发 levelToast、跳过主菜单）
+      // 用 gameFromUrl() 解析 URL（该函数内部已处理 Node/jsdom 无 location 的情况），
+      // 这里再补一道保护：smoke.js 在 jsdom 跑会直接 new Game，这里走不到；浏览器才进。
+      const hasUrlLevel = (typeof location !== 'undefined') &&
+        new URLSearchParams(location.search).get('level') === String(TEST_LEVEL_INDEX);
+      const urlBird = (typeof location !== 'undefined')
+        ? new URLSearchParams(location.search).get('bird') || undefined
+        : undefined;
+      const isTestEntry = hasUrlLevel;
+
+      g.onScore = (s) => {
+        const el = $('hud-score');
+        el.textContent = s.toLocaleString();
+        el.classList.add('pop');
+        setTimeout(() => el.classList.remove('pop'), 130);
+      };
+      g.onState = () => this.updateHud();
+      g.onHint = (text) => this.toast(text, text ? 2600 : 0);
+      g.onPause = (p) => {
+        Music.duck(p);                       // 暂停时把 BGM 压下去，回到游戏再抬起来
+        if (p) this.updatePausePanel();
+        this.show(p ? 'screen-pause' : null);
+      };
+      g.onFinish = (res) => this.showResult(res);
+      g.onEggFinish = (res) => this.showEggResult(res);
+      g.onEggExit = () => { this.show('screen-menu'); this.refreshMenu(); };
+      g.onRescueRequest = (info) => this.promptRescue(info);
 
     // 按钮
     $('btn-play').onclick = () => { Sfx.click(); this.startLevel(Math.min(Save.data.unlocked, LEVELS.length) - 1); };
@@ -129,8 +141,27 @@ const UI = {
     $('btn-back-menu').onclick = () => { Sfx.click(); this.show('screen-menu'); };
     $('btn-back-menu2').onclick = () => { Sfx.click(); this.show('screen-menu'); };
     $('btn-pause').onclick = () => { Sfx.click(); g.togglePause(); };
-    $('btn-restart').onclick = () => { Sfx.click(); g.restart(); this.show(null); };
-    $('btn-retry').onclick = () => { Sfx.click(); this.show(null); g.restart(); };
+    $('btn-restart').onclick = () => {
+      Sfx.click();
+      if (g.isTestLevel) {
+        // 测试关：保留当前鸟种置顶，其余 8 种循环跟随
+        const cur = g.currentBird && g.currentBird.def && g.currentBird.def.name
+          ? BIRD_TYPES_RAW && BIRD_TYPES_RAW.find
+            ? Object.keys(BIRD_TYPES).find(k => BIRD_TYPES[k] === g.currentBird.def)
+            : g.currentBird.type
+          : null;
+        g.loadLevelTest(cur || undefined);
+      } else {
+        g.restart();
+      }
+      this.show(null);
+    };
+    $('btn-retry').onclick = () => {
+      Sfx.click();
+      if (g.isTestLevel) g.loadLevelTest(undefined);
+      else g.restart();
+      this.show(null);
+    };
     $('btn-tolevels').onclick = () => { Sfx.click(); this.show(null); this.buildLevels(); this.show('screen-levels'); };
     $('btn-next').onclick = () => {
       Sfx.click(); this.show(null);
@@ -138,8 +169,26 @@ const UI = {
       if (n < LEVELS.length) this.startLevel(n); else { this.show('screen-levels'); this.buildLevels(); }
     };
     $('btn-resume').onclick = () => { Sfx.click(); g.togglePause(); };
-    $('btn-pause-restart').onclick = () => { Sfx.click(); this.show(null); g.restart(); };
-    $('btn-pause-menu').onclick = () => { Sfx.click(); g.paused = false; g.mode = 'menu'; this.show('screen-menu'); this.refreshMenu(); };
+    $('btn-pause-restart').onclick = () => {
+      Sfx.click();
+      this.show(null);
+      if (g.isTestLevel) {
+        // 测试关：暂停重启 → 保留当前鸟种刷新队列
+        const cur = g.currentBird ? g.currentBird.type : undefined;
+        g.loadLevelTest(cur);
+      } else {
+        g.restart();
+      }
+    };
+    $('btn-pause-menu').onclick = () => {
+      Sfx.click();
+      g.paused = false;
+      // 测试关退出 → 回主菜单（普通逻辑已经够用，g.mode 已被 loadLevel 设回 'birds'）
+      // 主动置 'menu' 防止 HUD 卡在游戏态
+      g.mode = 'menu';
+      this.show('screen-menu');
+      this.refreshMenu();
+    };
 
     // 彩蛋关
     $('btn-egg').onclick = () => {
@@ -181,7 +230,12 @@ const UI = {
     window.addEventListener('keydown', unlockAudio);
 
     this.refreshMenu();
-    this.show('screen-menu');
+    // URL 命中测试关 → 直接进入测试关，不显示主菜单
+    if (isTestEntry) {
+      this.startTestLevel(urlBird);
+    } else {
+      this.show('screen-menu');
+    }
     this.setupMobile();
 
     let last = performance.now();
@@ -311,14 +365,29 @@ const UI = {
   },
 
   /* ---------------- 游戏 ---------------- */
-  startLevel(i) {
-    const g = this.game;
-    g.loadLevel(i);
-    this.show(null);
-    this.updateHud();
-    Music.duck(false);
-    this.levelToast(i, g.level);
-  },
+startLevel(i) {
+      const g = this.game;
+      g.loadLevel(i);
+      this.show(null);
+      this.updateHud();
+      Music.duck(false);
+      this.levelToast(i, g.level);
+    },
+    /** 测试关入口：图鉴跳转命中 ?level=TEST_LEVEL_INDEX 时调用。
+     *  与 startLevel 等价但走 loadLevelTest —— 鸟队列不消耗、可循环，存档不沾边。 */
+    startTestLevel(birdType) {
+      const g = this.game;
+      g.loadLevelTest(birdType || undefined);
+      this.show(null);
+      this.updateHud();
+      Music.duck(false);
+      this.levelToast(TEST_LEVEL_INDEX, g.level);
+      // 顶部提示玩家测试关规则：9 只鸟循环、不计存档
+      const tip = birdType && BIRD_TYPES[birdType]
+        ? `已选中「${BIRD_TYPES[birdType].name}」开始测试，9 只鸟按固定顺序循环发射`
+        : '9 只鸟按固定顺序循环发射 —— 图鉴可再点其它鸟切换';
+      this.toast(tip, 3000);
+    },
   startEgg(diff) {
     const g = this.game;
     g.mode = 'egg';
@@ -399,28 +468,29 @@ const UI = {
     $('max-stars').textContent = LEVELS.length * 3;
   },
 
-  buildLegend() {
-    const el = $('bird-legend');
-    if (!el) return;
-    el.innerHTML = '';
-    for (const k in BIRD_TYPES) {
-      const d = BIRD_TYPES[k];
-      const card = document.createElement('div');
-      // 可点击 → 跳到技能测试靶场并直接选中该鸟
-      card.className = 'legend-card' + (d.rescue ? ' rescue' : '');
-      card.setAttribute('role', 'button');
-      card.tabIndex = 0;
-      card.title = `点击去靶场实测「${d.skill}」`;
-      card.setAttribute('aria-label', `${d.name} ${d.skill}，点击前往技能测试靶场实测`);
-      const go = () => {
-        Sfx.click();
-        // 用 hash 传参，靶场页面读取后自动切到这只鸟
-        window.open(`skill-demo.html#bird=${k}`, '_blank');
-      };
-      card.onclick = go;
-      card.onkeydown = (e) => {
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); }
-      };
+buildLegend() {
+      const el = $('bird-legend');
+      if (!el) return;
+      el.innerHTML = '';
+      for (const k in BIRD_TYPES) {
+        const d = BIRD_TYPES[k];
+        const card = document.createElement('div');
+        // 可点击 → 跳到技能测试关卡并直接选中该鸟
+        card.className = 'legend-card' + (d.rescue ? ' rescue' : '');
+        card.setAttribute('role', 'button');
+        card.tabIndex = 0;
+        card.title = `点击进入测试关实测「${d.skill}」`;
+        card.setAttribute('aria-label', `${d.name} ${d.skill}，点击前往技能测试关实测`);
+        const go = () => {
+          Sfx.click();
+          // ?level=TEST_LEVEL_INDEX 是约定的测试关入口（图鉴专用）
+          const target = `index.html?level=${TEST_LEVEL_INDEX}&bird=${encodeURIComponent(k)}`;
+          window.open(target, '_blank');
+        };
+        card.onclick = go;
+        card.onkeydown = (e) => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); }
+        };
       const cv = document.createElement('canvas');
       cv.width = 132; cv.height = 132;      // 2x 分辨率，窄屏下也清晰
       cv.className = 'legend-canvas';

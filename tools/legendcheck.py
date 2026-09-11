@@ -1,9 +1,11 @@
-"""图鉴 → 靶场 跳转链路验证。
+"""图鉴 → 测试关卡 跳转链路验证。
 
 验证：
 1. 主菜单图鉴卡片可点击、有 role=button、有 aria-label
-2. 点击后 window.open 被调用，URL 形如 skill-demo.html#bird=<type>
-3. 真实打开该 URL，靶场确实切到对应鸟、卡片高亮
+2. 点击后 window.open 被调用，URL 形如 index.html?level=10&bird=<type>
+3. 真实打开该 URL，进入测试关（L_TEST）且 currentBird 为指定鸟种、卡片高亮
+4. 测试关不污染 Save（levels[10] 不存在、unlocked 不变）
+5. 9 只鸟固定顺序循环（弹弓后队列顺序正确）
 
 跑法：
   C:/Users/杜若/.workbuddy/binaries/python/envs/default/Scripts/python.exe tools/legendcheck.py
@@ -82,21 +84,67 @@ def main() -> int:
             page.wait_for_timeout(150)
             opened = page.evaluate("() => window.__opened")
             print(f'  点击第 4 张卡片 → window.open 调用: {opened}')
-            ok3 = bool(opened) and 'bird=black' in opened[0][0] and opened[0][1] == '_blank'
-            print(f'  {"✓" if ok3 else "✗"} 打开 skill-demo.html#bird=black（新标签页）')
+            # 期望 URL = index.html?level=10&bird=black（新约定）
+            ok3 = bool(opened) and 'level=10' in opened[0][0] and 'bird=black' in opened[0][0] \
+                  and opened[0][1] == '_blank'
+            print(f'  {"✓" if ok3 else "✗"} 打开 index.html?level=10&bird=black（新标签页）')
             if not ok3:
                 bad += 1
 
-            # 真实打开该 URL，确认靶场选中黑鸟
-            page.goto(f'{base}/skill-demo.html#bird=black', wait_until='load')
-            page.wait_for_timeout(400)
-            cur = page.evaluate("() => window.__g.currentBird.type")
-            active = page.eval_on_selector('.bird-card.active', 'el => el.dataset.type')
-            ok4 = cur == 'black' and active == 'black'
-            print(f'  {"✓" if ok4 else "✗"} 靶场实开：currentBird={cur}, 高亮={active}')
+            # 真实打开该 URL，确认进入测试关、选中黑鸟
+            page.goto(f'{base}/index.html?level=10&bird=black', wait_until='load')
+            page.wait_for_timeout(500)
+            info = page.evaluate("""() => ({
+                isTest: window.__game.isTestLevel,
+                levelIdx: window.__game.levelIndex,
+                levelName: window.__game.level && window.__game.level.name,
+                currentType: window.__game.currentBird && window.__game.currentBird.type,
+                queue: window.__game.birdQueue.slice(),
+                queueLen: window.__game.birdQueue.length,
+            })""")
+            print(f'  进入测试关: {info}')
+            ok4 = info['isTest'] is True and info['levelIdx'] == 10 \
+                  and info['levelName'] == '技能测试关' and info['currentType'] == 'black'
+            print(f'  {"✓" if ok4 else "✗"} isTestLevel=true, levelIdx=10, currentBird=black')
             if not ok4:
                 bad += 1
-            page.screenshot(path=str(ROOT / '.preview' / 'legend_to_demo.png'))
+
+            # 图鉴跳转的指定鸟应被前置到队列首位；队列长度恒为 9
+            ok5 = info['queue'][0] == 'black' and info['queueLen'] == 9 \
+                  and info['queue'][1:] == ['red', 'yellow', 'blue', 'green', 'violet', 'orange', 'white', 'giant']
+            print(f'  {"✓" if ok5 else "✗"} 队列首位=black，长度={info["queueLen"]}，顺序={info["queue"][1:]}')
+            if not ok5:
+                bad += 1
+
+            # 不写存档：测试关通关（不算分）不污染 Save.data.levels[10] 和 unlocked
+            # 用 ui 暴露的 game 句柄拿 Save（通过 Save.data 直接从全局读）
+            save_present = page.evaluate("() => typeof window.Save !== 'undefined' && !!window.Save.data")
+            print(f'  Save 暴露: {save_present}')
+            if not save_present:
+                print('  ⚠ Save 未暴露到 window，跳过存档不变性断言（仅校验 isTestLevel 不写 Save 路径即可）')
+            else:
+                save_before = page.evaluate("""() => ({
+                    unlocked: window.Save.data.unlocked,
+                    levels10: window.Save.data.levels[10],
+                })""")
+                # 模拟玩家把第一只打飞、afterShot（不杀猪，触发换下一只）
+                page.evaluate("""() => {
+                    const g = window.__game;
+                    g.launch(g.currentBird, 900, -260);
+                    return true;
+                }""")
+                page.wait_for_timeout(800)
+                save_after = page.evaluate("""() => ({
+                    unlocked: window.Save.data.unlocked,
+                    levels10: window.Save.data.levels[10],
+                })""")
+                ok6 = save_before == save_after
+                print(f'  {"✓" if ok6 else "✗"} 测试关不污染存档（unlocked/levels[10] 发射前后一致）')
+                if not ok6:
+                    print(f'     before={save_before} after={save_after}')
+                    bad += 1
+
+            page.screenshot(path=str(ROOT / '.preview' / 'legend_to_testlevel.png'))
 
             ctx.close()
             browser.close()
@@ -107,7 +155,7 @@ def main() -> int:
     if bad:
         print(f'\n✗ {bad} 项未通过')
         return 1
-    print('\n✅ 图鉴卡片可点击 → 新标签打开靶场并自动选中该鸟')
+    print('\n✅ 图鉴卡片可点击 → 新标签打开测试关并自动选中该鸟')
     return 0
 
 

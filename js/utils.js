@@ -227,3 +227,7 @@ const Input = {
 };
 
 Save.load();   // 立即载入存档，保证任何模块都可直接使用 Save.data
+
+// 把 Save 暴露到 window，方便浏览器端自动化测试断言"测试关不污染存档"等不变量。
+// 必须在 Save 定义之后再赋值（utils.js 末尾）；Node/jsdom 环境无 window 自动跳过。
+if (typeof window !== 'undefined') window.Save = Save;
