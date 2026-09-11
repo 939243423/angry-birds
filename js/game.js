@@ -66,6 +66,11 @@ class Game {
     };
     const down = (e) => {
       Sfx.init(); Sfx.resume();
+      // 点在 UI 控件（暂停/静音/面板按钮）上时不当作游戏输入，
+      // 否则"飞行中点全屏放技能"会把点按钮也吃掉。
+      // 注意：这里必须是合法 CSS 选择器（不能写 #screen-*，会抛 SyntaxError）。
+      if (e.target && e.target.closest &&
+          e.target.closest('button, .screen, .modal, .mute-btn, .btn-icon, .legend-card')) return;
       const p = this.toWorld(e);
       this.pointer = p;
       this.downPos = p;
@@ -124,6 +129,14 @@ class Game {
       this.downPos = null;
     };
     cv.addEventListener('pointerdown', down);
+    // 竖屏下 16:9 画面窗只占屏幕中间一条（约 219px 高），上下大片是空白。
+    // 若只监听 canvas，玩家在画面外点屏幕想放技能会毫无反应（用户反馈的"下半屏点击失效"）。
+    // 故再挂一个 window 级监听：靠 toWorld 反算，画面外的点自然离弹弓很远，
+    // 不会误触发拖拽；而上一步已排除点在 UI 控件上的情况。
+    window.addEventListener('pointerdown', (e) => {
+      if (e.target === cv) return;      // canvas 自己的监听已处理，避免重复
+      down(e);
+    });
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
     window.addEventListener('pointercancel', up);
@@ -660,7 +673,9 @@ class Game {
       // 技能提示
       if (alive && bird.state === 'flying' && !bird.skillUsed && bird.fuse <= 0) {
         if (!this.hasSkillHintShown && this.launchCount <= 2 && this.levelIndex < 2) {
-          this.showSkillHint(`${bird.def.name}：点击画面释放「${bird.def.skill}」`);
+          // 文案用"屏幕"而不是"画面"：竖屏下画面窗只占中间一条，
+          // 但点击监听已覆盖整个视口，画面外的空白区同样能放技能
+          this.showSkillHint(`${bird.def.name}：点击屏幕释放「${bird.def.skill}」`);
           this.hasSkillHintShown = true;
         }
       }

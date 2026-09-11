@@ -508,10 +508,25 @@ html, body {
   transition:transform var(--t-fast) var(--ease-out), box-shadow var(--t-fast);
 }
 .legend-card:hover { transform:translateY(-3px); box-shadow:0 7px 16px rgba(160,110,50,.22), inset 0 1px 0 #fff; }
+/* 图鉴卡片可点击 → 跳到技能测试靶场实测该鸟技能 */
+.legend-card { cursor:pointer; }
+.legend-card:focus-visible { outline:3px solid #e0900f; outline-offset:2px; }
+.legend-card:hover { border-color:rgba(224,144,15,.7); }
 .legend-canvas { width:clamp(66px,9vh,100px); height:auto; aspect-ratio:1 / 1; display:block; }
 .legend-info { display:flex; flex-direction:column; align-items:center; line-height:1.25; text-align:center; }
 .legend-name { font-size:clamp(9px,1.32vh,15px); color:#5b3a16; }
 .legend-skill { font-size:clamp(7.5px,1.08vh,12px); color:#a8560f; }
+/* 「实地试技能 ↗」提示：常态低调，hover 时才亮起来，不干扰原有排版 */
+.legend-goto {
+  font-size:clamp(7px,1vh,11px);
+  color:#c07a1a;
+  opacity:0;
+  max-height:0;
+  overflow:hidden;
+  transition:opacity var(--t-fast), max-height var(--t-fast);
+}
+.legend-card:hover .legend-goto,
+.legend-card:focus-visible .legend-goto { opacity:1; max-height:2em; }
 /* 救援巨鸟：金色描边强调其特殊性 */
 .legend-card.rescue {
   border-color:rgba(240,180,60,.85);

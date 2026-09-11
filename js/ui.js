@@ -406,7 +406,21 @@ const UI = {
     for (const k in BIRD_TYPES) {
       const d = BIRD_TYPES[k];
       const card = document.createElement('div');
+      // 可点击 → 跳到技能测试靶场并直接选中该鸟
       card.className = 'legend-card' + (d.rescue ? ' rescue' : '');
+      card.setAttribute('role', 'button');
+      card.tabIndex = 0;
+      card.title = `点击去靶场实测「${d.skill}」`;
+      card.setAttribute('aria-label', `${d.name} ${d.skill}，点击前往技能测试靶场实测`);
+      const go = () => {
+        Sfx.click();
+        // 用 hash 传参，靶场页面读取后自动切到这只鸟
+        window.open(`skill-demo.html#bird=${k}`, '_blank');
+      };
+      card.onclick = go;
+      card.onkeydown = (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); }
+      };
       const cv = document.createElement('canvas');
       cv.width = 132; cv.height = 132;      // 2x 分辨率，窄屏下也清晰
       cv.className = 'legend-canvas';
@@ -418,7 +432,10 @@ const UI = {
       const sk = document.createElement('span');
       sk.className = 'legend-skill';
       sk.textContent = d.rescue ? `救援 · ${d.skill}` : d.skill;
-      info.appendChild(nm); info.appendChild(sk);
+      const hint = document.createElement('span');
+      hint.className = 'legend-goto';
+      hint.textContent = '实地试技能 ↗';
+      info.appendChild(nm); info.appendChild(sk); info.appendChild(hint);
       card.appendChild(cv); card.appendChild(info);
       el.appendChild(card);
       this.drawLegendBird(cv, d);
