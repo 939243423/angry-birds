@@ -1,0 +1,25 @@
+# 作用：减小构建上下文体积，并避免开发文件进入镜像。
+# 注意：nginx.conf 不能排除，Dockerfile 需要显式 COPY 它。
+
+# 版本控制
+.git
+.gitignore
+.gitattributes
+.github
+
+# 开发与测试脚本（不属于站点资源）
+tools
+*.md
+
+# 部署编排文件（镜像内不需要）
+docker-compose.yml
+deploy.sh
+Dockerfile
+.dockerignore
+
+# 编辑器 / 系统
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+*~

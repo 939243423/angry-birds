@@ -186,3 +186,53 @@ git push
 | `style:` | 样式 / 视觉调整 |
 | `docs:` | 文档 |
 | `chore:` | 构建 / 配置 / 依赖 |
+
+## 部署（Docker + Nginx）
+
+对外端口 **3011**。
+
+### 方式一：一键脚本（推荐）
+
+把项目放到服务器上，在项目根目录执行：
+
+```bash
+chmod +x deploy.sh
+./deploy.sh
+```
+
+脚本流程：拉取最新代码 → 构建并启动容器 → 等待服务就绪并自检 → 清理无用镜像。
+自检失败会自动打印容器日志并退出（非 0 退出码）。
+
+### 方式二：手动
+
+```bash
+docker compose up -d --build       # 构建并启动
+docker logs -f angry_birds_3011    # 查看日志
+docker compose down                # 停止
+```
+
+访问 `http://<服务器IP>:3011/`。
+
+### 文件说明
+
+| 文件 | 作用 |
+|------|------|
+| `Dockerfile` | 基于 `nginx:stable-alpine`，**白名单**只拷贝 `index.html` / `css/` / `js/` |
+| `nginx.conf` | 站点配置：gzip、缓存分级、安全响应头 |
+| `docker-compose.yml` | 端口映射 `3011:80`、日志轮转、异常自动重启 |
+| `deploy.sh` | 一键部署脚本（含部署后自检） |
+| `.dockerignore` | 缩小构建上下文，避免开发文件进入镜像 |
+
+### 为什么不像素级缓存 CSS / JS？
+
+`nginx.conf` 中 **HTML / CSS / JS 统一使用协商缓存**（`expires -1`），只有图片字体走 30 天强缓存。
+
+因为本项目资源是固定文件名（`css/style.css`），**没有内容指纹**。若对 CSS/JS 使用长强缓存，
+更新部署后老用户浏览器会持续命中旧缓存、看不到变化。协商缓存未修改时返回 304，开销可忽略。
+
+### 部署注意
+
+- **存档按「协议 + 域名 + 端口」隔离**：游戏进度存在浏览器 `localStorage`。
+  从 `localhost:8765` 换到 `IP:3011` 访问时进度会重新开始，属正常现象。
+- 服务器防火墙 / 云安全组需放行 **3011** 端口。
+- 已通过 `git update-index --chmod=+x` 为 `deploy.sh` 标记可执行位，服务器上 clone 后可直接 `./deploy.sh`。
