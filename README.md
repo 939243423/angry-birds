@@ -137,9 +137,9 @@ genRescueCode('TITAN01')   // → "TITAN01D"
 ```
 angry-birds/
 ├── index.html              # 入口（已包含 H5 viewport、主题、favicon）
-├── favicon.svg             # 站点图标（矢量红鸟头像）
-├── favicon-32.png          # 位图备选（老浏览器标签页）
-├── favicon-180.png         # apple-touch-icon（iOS 加到主屏）
+├── favicon.svg             # 站点图标（矢量红鸟头像，**背景透明**）
+├── favicon-32.png          # 位图备选（老浏览器标签页，透明底）
+├── favicon-180.png         # apple-touch-icon（iOS 加到主屏，透明底）
 ├── css/style.css           # 玻璃拟态 UI、关卡卡片、按钮动画
 ├── js/
 │   ├── utils.js            # Save/Input/Vec 工具
@@ -155,8 +155,30 @@ angry-birds/
 │   └── ui.js               # 屏幕切换、菜单、结算面板
 └── tools/
     ├── mock.js             # Node mock DOM（仅测试用）
-    └── smoke.js            # 冒烟自检（DOM/物理/弹道/通关模拟/UI 流程）
+    ├── smoke.js            # 冒烟自检（DOM/物理/弹道/通关模拟/UI 流程）
+    ├── genfavicon.py       # 从 favicon.svg 重渲染透明 PNG（改图标后需重跑）
+    ├── faviconcheck.py     # 校验 favicon 只有鸟、四周透明（无黑底）
+    ├── levelcheck.py       # 10 关机制体检（53 条断言 + 逐关截图）
+    └── skillcheck.py       # 九只鸟技能可感知性量化（粒子/飘字/轻闪）
 ```
+
+## 站点图标（favicon）
+
+`favicon.svg` 是唯一源文件，**背景必须保持透明**（不要加 `<rect width="64" height="64" fill="#101a2b">`
+之类的底板）—— 否则在深色标签栏 / iOS 主屏上会露出一块黑方块。
+
+改完 SVG 后需重新生成位图：
+
+```bash
+C:/Users/杜若/.workbuddy/binaries/python/envs/default/Scripts/python.exe tools/genfavicon.py
+```
+
+脚本用 Playwright 以 `omit_background=True` 截取 SVG，输出 `favicon-32.png` /
+`favicon-180.png`，并自检四角 alpha=0。另有 `tools/faviconcheck.py` 在真实浏览器里
+复核（HTTP 可达 / 无底板 / 四角透明 / 中心不透明）。
+
+> 透明后深色环境下暗红外缘易糊，故 SVG 给身体/尾羽/羽毛/喙补了一层更深的描边
+> （`#5a0d07` / `#a85800`）—— 调色时别把这层描边删掉。
 
 ## 验证
 

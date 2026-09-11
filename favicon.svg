@@ -11,21 +11,23 @@
     </linearGradient>
   </defs>
 
-  <rect width="64" height="64" rx="14" fill="#101a2b"/>
+  <!-- 无底板：整块画布透明，只在标签页/主屏上留下红鸟本体。
+       透明后浏览器标签栏可能是深色，故给暗红外缘补一层更深的描边，
+       小尺寸下仍能看清轮廓（描边宽度按 32px 显示时约 0.75px 取） -->
 
   <!-- 尾羽 -->
-  <path d="M16 30 L5 18 L9 32 L5 45 L18 38 Z" fill="#8f1a12"/>
+  <path d="M16 30 L5 18 L9 32 L5 45 L18 38 Z" fill="#8f1a12" stroke="#5a0d07" stroke-width="1.6" stroke-linejoin="round"/>
 
   <!-- 身体 -->
-  <circle cx="33" cy="33" r="20" fill="url(#body)"/>
+  <circle cx="33" cy="33" r="20" fill="url(#body)" stroke="#5a0d07" stroke-width="1.6"/>
   <!-- 右下暗部 -->
   <path d="M33 13a20 20 0 0 1 0 40 20 20 0 0 1 0-40z" fill="#000" opacity=".18"/>
   <!-- 肚皮 -->
   <ellipse cx="36" cy="42" rx="11" ry="8" fill="#ffe3b8"/>
 
   <!-- 头顶羽毛 -->
-  <ellipse cx="28" cy="14" rx="6" ry="2.6" fill="#8f1a12" transform="rotate(-30 28 14)"/>
-  <ellipse cx="36" cy="12" rx="6" ry="2.6" fill="#8f1a12" transform="rotate(-9 36 12)"/>
+  <ellipse cx="28" cy="14" rx="6" ry="2.6" fill="#8f1a12" stroke="#5a0d07" stroke-width="1.2" transform="rotate(-30 28 14)"/>
+  <ellipse cx="36" cy="12" rx="6" ry="2.6" fill="#8f1a12" stroke="#5a0d07" stroke-width="1.2" transform="rotate(-9 36 12)"/>
 
   <!-- 眼睛 -->
   <ellipse cx="28" cy="27" rx="6" ry="6.4" fill="#fff"/>
@@ -39,8 +41,8 @@
   <path d="M20 19.5 L29 24 M49 18.5 L39.5 23.5" stroke="#8f1a12" stroke-width="3.6" stroke-linecap="round" fill="none"/>
 
   <!-- 喙 -->
-  <path d="M42 28.5 L58 32.6 L42 33.6 Z" fill="url(#beak)"/>
-  <path d="M42 33.4 L58 32.6 L43 37.4 Z" fill="#e0900f"/>
+  <path d="M42 28.5 L58 32.6 L42 33.6 Z" fill="url(#beak)" stroke="#a85800" stroke-width="1.2" stroke-linejoin="round"/>
+  <path d="M42 33.4 L58 32.6 L43 37.4 Z" fill="#e0900f" stroke="#a85800" stroke-width="1.2" stroke-linejoin="round"/>
 
   <!-- 高光 -->
   <ellipse cx="24" cy="22" rx="6.5" ry="3.2" fill="#fff" opacity=".38" transform="rotate(-32 24 22)"/>
