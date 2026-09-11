@@ -10,8 +10,10 @@ class Particle {
     this.life = o.life || 1; this.maxLife = this.life;
     this.size = o.size || 6;
     this.type = o.type || 'spark';
-    this.rot = o.rot || rand(0, TAU);
-    this.vr = o.vr || rand(-6, 6);
+    // 注意：rot / vr 的 0 是合法取值（例如飘字要水平且不自旋），
+    // 不能用 || 兜底，否则显式传入的 0 会被随机值覆盖
+    this.rot = o.rot === undefined ? rand(0, TAU) : o.rot;
+    this.vr = o.vr === undefined ? rand(-6, 6) : o.vr;
     this.grav = o.grav === undefined ? 900 : o.grav;
     this.drag = o.drag === undefined ? 0.6 : o.drag;
     this.color = o.color || '#fff';
@@ -20,6 +22,7 @@ class Particle {
     this.dead = false;
     this.fade = o.fade === undefined ? 1 : o.fade;
     this.glow = o.glow || false;
+    this.text = o.text;   // text 类型粒子的文案（此前漏拷贝，导致飘字一律显示 undefined）
   }
   update(dt, wind) {
     this.vx += (wind || 0) * dt * 0.5;
@@ -121,6 +124,7 @@ class ParticleSystem {
           break;
         }
         case 'text': {
+          if (!p.text) break;   // 防御：无文案时绝不绘制，避免出现 "undefined"
           ctx.fillStyle = p.color;
           ctx.font = `900 ${p.size}px "PingFang SC", system-ui, sans-serif`;
           ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -253,7 +257,9 @@ class Fx {
   scoreText(x, y, text, color = '#ffe066', size = 34) {
     this.p.add(new Particle({
       x, y, vx: rand(-20, 20), vy: -170, life: 1.05, size,
-      type: 'text', text, color, grav: 300, drag: 1.1
+      type: 'text', text, color, grav: 300, drag: 1.1,
+      rot: rand(-0.05, 0.05),   // 默认 rot 是 0~2π 随机角，会把飘字转歪，这里收敛为轻微倾斜
+      vr: 0                     // 飘字不自旋
     }));
   }
   confetti(x, y, n = 40) {

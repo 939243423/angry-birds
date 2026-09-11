@@ -587,13 +587,19 @@ class Game {
     if (win && this.levelIndex + 1 >= Save.data.unlocked) {
       Save.data.unlocked = Math.min(LEVELS.length, this.levelIndex + 2);
     }
-    if (win && Save.data.unlocked >= 4 && !Save.data.eggUnlocked) {
-      Save.data.eggUnlocked = true;
-      this.justUnlockedEgg = true;
+    // 彩蛋关解锁条件：在第 3 关拿到 2 星及以上
+    let eggHint = '';
+    if (win && this.levelIndex === 2 && !Save.data.eggUnlocked) {
+      if (stars >= 2) {
+        Save.data.eggUnlocked = true;
+        this.justUnlockedEgg = true;
+      } else {
+        eggHint = `隐藏关卡解锁条件：本关拿到 2 星（本次 ${stars} 星，还差 ${2 - stars} 星）`;
+      }
     }
     Save.save();
     this.emitScore();
-    if (this.onFinish) this.onFinish({ win, stars, score: this.score, remaining, levelIndex: this.levelIndex });
+    if (this.onFinish) this.onFinish({ win, stars, score: this.score, remaining, levelIndex: this.levelIndex, eggHint });
   }
 
   restart() { this.loadLevel(this.levelIndex); }

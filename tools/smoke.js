@@ -271,6 +271,44 @@ console.log('— UI 初始化与交互 —');
   }
 }
 
+/* ---------- 4.9 得分飘字 / 彩蛋解锁门槛 ---------- */
+console.log('— 得分飘字 / 解锁门槛 —');
+{
+  // 飘字：曾被 Particle 构造函数漏拷贝 text 字段，导致一律画出 "undefined"
+  const g = new Game(makeEl());
+  g.loadLevel(0);
+  g.fx.p.clear();
+  g.addScore(500, 700, 400);
+  const txt = g.fx.p.list.filter(p => p.type === 'text');
+  const hasText = txt.length > 0 &&
+    txt.every(p => typeof p.text === 'string' && p.text.length > 0 && p.text.indexOf('undefined') < 0);
+  console.log(`  ${hasText ? '✓' : '✗'} 飘字粒子 ${txt.length} 个: ${txt.map(p => JSON.stringify(p.text)).join(', ')}`);
+  if (!hasText) bad('得分飘字文案丢失或为 undefined（Particle 未拷贝 text）');
+
+  const flat = txt.every(p => Math.abs(p.rot) < 0.3 && p.vr === 0);
+  console.log(`  ${flat ? '✓' : '✗'} 飘字朝向：保持水平（不随机旋转）`);
+  if (!flat) bad('飘字被随机角度旋转');
+
+  // 彩蛋关解锁门槛：第 3 关拿到 2 星才算达成
+  const probe = (lvlIdx, score) => {
+    Save.data.levels = {};
+    Save.data.eggUnlocked = false;
+    const gg = new Game(makeEl());
+    gg.loadLevel(lvlIdx);
+    gg.birdQueue.length = 0;          // 屏蔽剩余小鸟奖励，精确控制分数
+    gg.score = score;
+    gg.finishLevel(true);
+    return Save.data.eggUnlocked;
+  };
+  const tier = LEVELS[2]().stars;
+  const at1 = probe(2, tier[0]);      // 恰好 1 星
+  const at2 = probe(2, tier[1]);      // 恰好 2 星
+  console.log(`  ${!at1 && at2 ? '✓' : '✗'} 解锁门槛：第3关 1星→${at1 ? '解锁' : '未解锁'}，2星→${at2 ? '解锁' : '未解锁'}`);
+  if (at1) bad('第 3 关 1 星不应解锁彩蛋关');
+  if (!at2) bad('第 3 关 2 星应解锁彩蛋关');
+  Save.reset();
+}
+
 /* ---------- 5. 彩蛋关 ---------- */
 console.log('— 彩蛋关（智能策略模拟 30 局） —');
 for (const diff of [0, 1]) {

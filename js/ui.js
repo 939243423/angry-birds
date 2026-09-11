@@ -223,6 +223,12 @@ const UI = {
     $('result-best').textContent = best.toLocaleString();
     const badge = $('result-newbest');
     if (badge) badge.classList.toggle('hidden', !(res.win && res.score > rec.score));
+    // 差星提示：本关未达 2 星时告诉玩家还差多少才能解锁隐藏关卡
+    const eggHintEl = $('result-egg-hint');
+    if (eggHintEl) {
+      eggHintEl.textContent = res.eggHint || '';
+      eggHintEl.classList.toggle('hidden', !res.eggHint);
+    }
     $('btn-next').style.display = (res.win && res.levelIndex + 1 < LEVELS.length) ? '' : 'none';
     const stars = Array.from(document.querySelectorAll('#stars-row .star-big') || []);
     stars.forEach(s => { s.classList.remove('on'); s.style.animation = 'none'; });
@@ -261,6 +267,8 @@ const UI = {
     $('result-best').textContent = `金羽 ${Save.data.feathers} / 3`;
     const nBadge = $('result-newbest');
     if (nBadge) nBadge.classList.add('hidden');
+    const eHint = $('result-egg-hint');
+    if (eHint) eHint.classList.add('hidden');
     $('btn-next').style.display = 'none';
     const stars = document.querySelectorAll('#stars-row .star-big');
     stars.forEach(s => s.classList.remove('on'));
