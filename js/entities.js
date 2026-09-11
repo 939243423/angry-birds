@@ -5,7 +5,7 @@
 
 const SLING = { x: 306, y: 612 };     // 弹弓叉口中心
 const MAX_STRETCH = 98;
-const SLING_POWER = 15.0;    // 满拉 ≈ 1470px/s，45° 射程约 1200px
+const SLING_POWER = 17.5;    // 满拉 ≈ 1715px/s，45° 射程约 1680px（力度上调 17%，打得更痛快）
 
 /* ---------------- 小鸟 ---------------- */
 const BIRD_TYPES = {

@@ -17,10 +17,16 @@ const Sfx = {
     const comp = this.ctx.createDynamicsCompressor();
     comp.threshold.value = -12; comp.ratio.value = 8;
     this.master.connect(comp); comp.connect(this.ctx.destination);
+    this.comp = comp;   // 供 BGM（music.js）挂到同一条压缩链路上
     this.ready = true;
   },
   resume() { if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume(); },
-  setMuted(m) { this.muted = m; if (this.master) this.master.gain.value = m ? 0 : 0.55; },
+  setMuted(m) {
+    this.muted = m;
+    if (this.master) this.master.gain.value = m ? 0 : 0.55;
+    // 静音是全局的：音效与 BGM 一起开关
+    if (typeof Music !== 'undefined' && Music.setMuted) Music.setMuted(m);
+  },
 
   _env(node, t, a, d, peak) {
     const g = this.ctx.createGain();

@@ -94,7 +94,11 @@ class Game {
         const d = len(dx, dy);
         if (d > MAX_STRETCH) { dx = dx / d * MAX_STRETCH; dy = dy / d * MAX_STRETCH; }
         b.x = SLING.x + dx; b.y = SLING.y + dy;
-        this.updateAimPreview(-dx, -dy);
+        // 注意：这里必须传"发射速度"（拉杆位移 × SLING_POWER）。
+        // 曾经误传了拉杆位移本身，模拟初速只有 ~98px/s，被重力瞬间拽下去，
+        // 画出来的是一条直插地面的短线而不是抛物线。
+        const v = this.pullToVelocity(dx, dy);
+        this.updateAimPreview(v.vx, v.vy);
       }
     };
     const up = (e) => {
@@ -106,12 +110,12 @@ class Game {
       }
       if (this.drag.active && this.currentBird) {
         const b = this.currentBird;
-        const dx = SLING.x - b.x, dy = SLING.y - b.y;
-        const d = len(dx, dy);
+        const pullX = b.x - SLING.x, pullY = b.y - SLING.y;
+        const d = len(pullX, pullY);
         this.drag.active = false; b.dragging = false;
         if (d > 16) {
-          const pw = SLING_POWER;
-          this.launch(b, dx * pw, dy * pw);
+          const v = this.pullToVelocity(pullX, pullY);
+          this.launch(b, v.vx, v.vy);
         } else {
           b.x = SLING.x; b.y = SLING.y - 14;
           this.aimPoints.length = 0;
@@ -731,6 +735,13 @@ class Game {
   }
 
   /* ---------------- 瞄准预测 ---------------- */
+  /** 拉杆位移（小鸟相对弹弓的偏移）→ 发射速度。
+   *  预览与真实发射共用这一份换算，从根上杜绝"画的轨迹和实际飞行不一致"。 */
+  pullToVelocity(pullX, pullY) {
+    return { vx: -pullX * SLING_POWER, vy: -pullY * SLING_POWER };
+  }
+
+  /** 用发射速度前向积分出一条抛物线轨迹，遇到猪/砖块/地面即停并记录命中点 */
   updateAimPreview(vx, vy) {
     let x = SLING.x, y = SLING.y - 14, dx = vx, dy = vy;
     const pts = [];

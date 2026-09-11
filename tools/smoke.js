@@ -52,11 +52,34 @@ global.performance = { now: () => Date.now() };
 global.requestAnimationFrame = () => 0;
 const store = {};
 global.localStorage = { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = v; } };
+
+/* 最小可用的 WebAudio 假实现：让 audio.js / music.js 的音符排程能被真实执行 */
+function makeAudioCtx() {
+  const param = () => ({
+    value: 0,
+    setValueAtTime() { }, exponentialRampToValueAtTime() { },
+    linearRampToValueAtTime() { }, setTargetAtTime() { }
+  });
+  const node = extra => Object.assign({ connect() { }, disconnect() { }, start() { }, stop() { } }, extra);
+  return {
+    currentTime: 0, sampleRate: 44100, state: 'running', destination: node(),
+    resume() { },
+    createGain: () => node({ gain: param() }),
+    createOscillator: () => node({ type: 'sine', frequency: param(), detune: param() }),
+    createBufferSource: () => node({ buffer: null, playbackRate: param() }),
+    createBiquadFilter: () => node({ type: 'lowpass', frequency: param(), Q: param() }),
+    createDynamicsCompressor: () => node({
+      threshold: param(), ratio: param(), knee: param(), attack: param(), release: param()
+    }),
+    createBuffer: (ch, len) => ({ getChannelData: () => new Float32Array(len) })
+  };
+}
+global.window.AudioContext = makeAudioCtx;
 // 刻意不提供 global.confirm：存档清除已改为自绘确认弹窗。
 // 若代码回归调用原生 confirm，此处会抛 ReferenceError 让冒烟直接失败。
 
 const dir = path.join(__dirname, '..', 'js');
-const files = ['utils.js', 'audio.js', 'particles.js', 'physics.js', 'entities.js', 'levels.js', 'render.js', 'egggame.js', 'game.js', 'ui.js'];
+const files = ['utils.js', 'audio.js', 'music.js', 'particles.js', 'physics.js', 'entities.js', 'levels.js', 'render.js', 'egggame.js', 'game.js', 'ui.js'];
 for (const f of files.slice(0, -1))
   vm.runInThisContext(fs.readFileSync(path.join(dir, f), 'utf8'), { filename: f });
 
@@ -251,6 +274,28 @@ console.log('— 救援机制与瞄准辅助 —');
   }
   console.log(`  ${pigAngle !== null ? '✓' : '✗'} 存在可命中猪的瞄准角${pigAngle !== null ? `（${pigAngle}°）` : ''}`);
   if (pigAngle === null) bad('没有任何角度能命中猪，轨迹停止逻辑可能有误');
+
+  // 真实拖拽路径：预览必须按"发射速度"积分。
+  // 曾经这里传的是拉杆位移本身（约 98px/s 而不是 98×SLING_POWER），
+  // 被重力一拽就变成一条直插地面的短线 —— 上面两处断言因为直接传速度所以全都测不到。
+  {
+    const g4 = new Game(makeEl());
+    g4.loadLevel(0);
+    const pull = { x: -60, y: 66 };                     // 往左下拽 → 朝右上发射
+    const v = g4.pullToVelocity(pull.x, pull.y);
+    const want = len(pull.x, pull.y) * SLING_POWER;
+    const speedOk = Math.abs(len(v.vx, v.vy) - want) < 1e-6;
+    g4.updateAimPreview(v.vx, v.vy);
+    const pts = g4.aimPoints, n = pts.length;
+    const longEnough = n > 10;
+    const rises = n > 3 && pts[Math.floor(n * 0.3)].y < pts[0].y - 40;   // 中段在爬升 = 抛物线
+    const reachOk = n > 0 && pts[n - 1].x > 700;
+    console.log(`  ${speedOk && longEnough && rises && reachOk ? '✓' : '✗'} 真实拖拽弹道：初速 ${len(v.vx, v.vy).toFixed(0)}px/s，采样 ${n} 点，末端 x=${n ? pts[n - 1].x.toFixed(0) : '-'}`);
+    if (!speedOk) bad('拖拽位移 → 发射速度换算错误，预览与实际发射不一致');
+    if (!longEnough) bad('真实拖拽下瞄准轨迹采样点过少（疑似被重力瞬间拽到地面）');
+    if (!rises) bad('真实拖拽下轨迹不是抛物线');
+    if (!reachOk) bad('真实拖拽下轨迹打不到远处');
+  }
 }
 
 /* ---------- 4.5 自动通关模拟（解析弹道 + 贪心瞄准） ---------- */
@@ -298,6 +343,51 @@ for (let i = 0; i < LEVELS.length; i++) {
   console.log(`  第${i + 1}关 ${g.level.name}: ${ok ? '✓ 通关' : '· 剩余猪 ' + left + '/' + total}  发射${shots}次 分数${g.score} ${'★'.repeat(stars)}${'☆'.repeat(3 - stars)}`);
 }
 
+/* ---------- 4.7 音频：音效 + 循环 BGM ---------- */
+console.log('— 音频（音效 + BGM） —');
+{
+  Sfx.init();
+  Music.init();
+  const sfxReady = Sfx.ready === true, busOk = !!Music.out;
+
+  // 曲谱自检：每小节 16 步、低音 8 步，所有音名都能解析成有效频率
+  const P = Music.PATTERN, bars = P.lead.length, noteErr = [];
+  for (let b = 0; b < bars; b++) {
+    if (P.lead[b].length !== 16) noteErr.push(`lead[${b}] ${P.lead[b].length} 步`);
+    if (P.bassShape[b].length !== 8) noteErr.push(`bassShape[${b}] ${P.bassShape[b].length} 步`);
+    for (const nm of P.lead[b]) if (nm !== '.' && !(Music.freqOf(nm) > 0)) noteErr.push(`未知音名 ${nm}`);
+    for (const nm of P.CHORDS[P.chords[b]]) if (!(Music.freqOf(nm) > 0)) noteErr.push(`未知和弦音 ${nm}`);
+    if (!P.bassRoot[P.chords[b]]) noteErr.push(`和弦 ${P.chords[b]} 没有低音根音`);
+  }
+  console.log(`  ${sfxReady && busOk && !noteErr.length ? '✓' : '✗'} 音频总线：音效=${sfxReady} BGM=${busOk}，曲谱 ${bars} 小节 × 16 步，问题 ${noteErr.length}`);
+  if (!sfxReady) bad('音效模块未初始化');
+  if (!busOk) bad('BGM 输出总线未建立');
+  if (noteErr.length) bad('BGM 曲谱有非法音符：' + noteErr.slice(0, 5).join('; '));
+
+  // 排程器：推进 currentTime 后应连续排入音符并步进
+  Music.arm();
+  const playing = Music.playing === true;
+  Sfx.ctx.currentTime = 1.0;
+  const s0 = Music._step;
+  Music.tick();
+  const advanced = Music._step > s0;
+  console.log(`  ${playing && advanced ? '✓' : '✗'} BGM 起播=${playing}，排程步进 ${s0} → ${Music._step}`);
+  if (!playing) bad('BGM 未起播');
+  if (!advanced) bad('BGM 排程器没有推进');
+
+  // 静音是全局的：一键同时管住音效与 BGM
+  Sfx.setMuted(true);
+  const mutedOff = Music.muted === true && Music.playing === false;
+  Sfx.setMuted(false);
+  const backOn = Music.muted === false && Music.playing === true;
+  console.log(`  ${mutedOff && backOn ? '✓' : '✗'} 静音联动：静音停 BGM=${mutedOff}，取消静音自动恢复=${backOn}`);
+  if (!mutedOff) bad('静音没有停掉 BGM');
+  if (!backOn) bad('取消静音后 BGM 没有恢复');
+
+  Music.stop();
+  Music._armed = false;      // 别让后面的 UI 初始化把定时器再拉起来
+}
+
 /* ---------- 4.8 UI 初始化与交互流程 ---------- */
 console.log('— UI 初始化与交互 —');
 {
@@ -309,6 +399,17 @@ console.log('— UI 初始化与交互 —');
     UI.startLevel(0);
     UI.game.update(1 / 60);
     console.log('  ✓ 开始冒险 → 第1关 渲染一帧通过');
+    // 关卡开场横幅：标题 + 提示分两行（原来拼成一整句，竖屏下会撑成一大坨）
+    const tEl = document.getElementById('toast');
+    const bannerOk = tEl.classList.contains('toast-level') &&
+      /toast-title/.test(tEl.innerHTML) && /第 1 关/.test(tEl.innerHTML) && /toast-tip/.test(tEl.innerHTML);
+    console.log(`  ${bannerOk ? '✓' : '✗'} 关卡横幅双行结构: ${JSON.stringify(tEl.innerHTML.slice(0, 72))}`);
+    if (!bannerOk) bad('关卡开场横幅没有渲染成"标题+提示"两行结构');
+    // 普通提示必须退回单行样式，不能残留横幅布局
+    UI.toast('普通提示');
+    const plainOk = !tEl.classList.contains('toast-level') && tEl.textContent === '普通提示';
+    console.log(`  ${plainOk ? '✓' : '✗'} 普通 toast 不残留横幅样式`);
+    if (!plainOk) bad('普通 toast 残留了关卡横幅的布局类');
     // 模拟：关卡选择 / 说明 / 暂停 / 结算
     UI.buildLevels(); UI.show('screen-levels'); UI.show('screen-howto');
     UI.game.togglePause(); UI.game.togglePause();

@@ -28,7 +28,11 @@ const UI = {
     };
     g.onState = () => this.updateHud();
     g.onHint = (text) => this.toast(text, text ? 2600 : 0);
-    g.onPause = (p) => { if (p) this.updatePausePanel(); this.show(p ? 'screen-pause' : null); };
+    g.onPause = (p) => {
+      Music.duck(p);                       // 暂停时把 BGM 压下去，回到游戏再抬起来
+      if (p) this.updatePausePanel();
+      this.show(p ? 'screen-pause' : null);
+    };
     g.onFinish = (res) => this.showResult(res);
     g.onEggFinish = (res) => this.showEggResult(res);
     g.onEggExit = () => { this.show('screen-menu'); this.refreshMenu(); };
@@ -107,6 +111,19 @@ const UI = {
     muteBtn.onclick = () => { Save.data.muted = !Save.data.muted; Save.save(); applyMute(); };
     applyMute();
 
+    // 音频解锁：浏览器策略要求先有用户手势才允许出声（BGM 也受此限制）。
+    // 首次点按/按键时初始化音频并起播 BGM，之后注销监听。
+    const unlockAudio = () => {
+      Sfx.init(); Sfx.resume();
+      if (!Save.data.muted) Music.arm();
+      if (window.removeEventListener) {
+        window.removeEventListener('pointerdown', unlockAudio);
+        window.removeEventListener('keydown', unlockAudio);
+      }
+    };
+    window.addEventListener('pointerdown', unlockAudio);
+    window.addEventListener('keydown', unlockAudio);
+
     this.refreshMenu();
     this.show('screen-menu');
     this.setupMobile();
@@ -151,7 +168,25 @@ const UI = {
   toast(text, ms = 2000) {
     const el = $('toast');
     if (!text) { el.classList.add('hidden'); return; }
+    el.classList.remove('toast-level');
     el.textContent = text;
+    this._revealToast(ms);
+  },
+
+  /** 关卡开场横幅：标题 + 提示分两行。原来拼成一整句，
+   *  在手机竖屏里会被撑成一大坨，遮掉半个画面。 */
+  levelToast(i, level) {
+    const el = $('toast');
+    if (!el || !level) return;
+    el.innerHTML =
+      `<b class="toast-title">第 ${i + 1} 关 · ${esc(level.name)}</b>` +
+      `<span class="toast-tip">${esc(level.tip)}</span>`;
+    el.classList.add('toast-level');
+    this._revealToast(3200);
+  },
+
+  _revealToast(ms) {
+    const el = $('toast');
     el.classList.remove('hidden');
     el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
     clearTimeout(this._toastT);
@@ -164,7 +199,8 @@ const UI = {
     g.loadLevel(i);
     this.show(null);
     this.updateHud();
-    this.toast(`第 ${i + 1} 关 · ${g.level.name} — ${g.level.tip}`, 3200);
+    Music.duck(false);
+    this.levelToast(i, g.level);
   },
   startEgg(diff) {
     const g = this.game;
